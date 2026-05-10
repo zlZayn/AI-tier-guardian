@@ -1,0 +1,345 @@
+# 三庭二审内容审核引擎架构设计文档（已过时）
+
+## 一、设计哲学与运作原则
+
+**总原则**：AI 只做极窄的语义判断，程序做所有仲裁与执行。  
+**AI 铁律**：
+1. 每个 AI 只与中央程序通信，从程序收输入、向程序返输出；AI 间互不知晓。
+2. 所有 AI 输出必须符合预定义 JSON Schema，程序强制校验，不符则视为“无响应”并走降级。
+3. AI 输入仅包含必要信息，不含任何用于自主决策的元数据（如调用 ID、时间戳仅用于日志）。
+4. 全部 AI 共享同一大语言模型实例（DeepSeek V4），但每个节点通过参数独立控制思考模式与生成配置。
+
+**分流哲学**：正常内容在毫无“思考”的前置层就被迅速放行，可疑内容才逐层深入，最模糊的边界交给人工。
+
+---
+
+## 二、全局数据结构
+
+程序内部维护一个统一的任务上下文对象，随流程传递：
+
+```json
+{
+  "text": "原始用户文本",
+  "locale": "zh-CN",
+  "scene": "comment",
+  "nodes": {
+    "surface": null,
+    "intent": null,
+    "judge": null,
+    "summary": null
+  },
+  "final_decision": null,
+  "metadata": {
+    "task_id": "uuid",
+    "created_at": "iso_timestamp"
+  }
+}
+```
+
+`nodes` 字段逐步填充。`final_decision` 由仲裁器写入，可选值：`PASS`、`BLOCK`、`HUMAN_REVIEW`。
+
+---
+
+## 三、节点详细规范
+
+### 节点 A – 表层扫描员 `surface_scanner`
+
+| 项目 | 设置 |
+|------|------|
+| **思考模式** | 关闭 (`thinking: false`) |
+| **温度** | `0.0` |
+| **max_tokens** | `150` |
+| **超时** | `500ms` |
+| **职责** | 仅识别字面高风险模式，不分析语义、不判意图、不推断语境 |
+
+#### 输入
+```json
+{
+  "text": "原文",
+  "locale": "zh-CN",
+  "schema_version": "v2.3.1"
+}
+```
+
+#### 输出（严格 JSON）
+```json
+{
+  "patterns": [
+    {
+      "id": "P021",
+      "category": "contact_exposure",
+      "fragment": "13800138000",
+      "span": [45, 56]
+    }
+  ],
+  "surface_risk": "low"
+}
+```
+- `patterns`：最多5条命中，超过仅返回前5条且 `surface_risk` 至少为 `medium`。
+- `category` 枚举：`contact_exposure`, `insult_template`, `illegal_transaction_keywords`, `minor_protection_risk`, `spam_template`, `other`。
+- `surface_risk`：`low`, `medium`, `high`。
+
+#### Prompt 要点
+- 角色：字面模式扫描器，忽略语境。
+- 任务：对照内置高风险模式知识匹配，输出 JSON。
+- 禁止：自由文本解释、推测意图。
+- 占位：无命中时 `patterns: [], surface_risk: "low"`。
+
+#### 异常降级
+- 输出解析失败或超时 → `surface_risk` 视为 `"medium"`。
+
+---
+
+### 节点 B – 意图探测员 `intent_probe`
+
+| 项目 | 设置 |
+|------|------|
+| **思考模式** | 关闭 |
+| **温度** | `0.0` |
+| **max_tokens** | `80` |
+| **超时** | `500ms` |
+| **职责** | 仅判断文本的行为意图，不评论内容是否违规 |
+
+#### 输入
+```json
+{
+  "text": "原文",
+  "context_hint": "comment"
+}
+```
+
+#### 输出
+```json
+{
+  "intent": "solicitation",
+  "confidence": 0.85
+}
+```
+- `intent` 枚举（固定）：`normal_social`, `solicitation`, `harassment`, `spam_promotion`, `information_seeking`, `opinion_expression`, `other`。
+- `confidence`：0.0-1.0，仅用于后续加权，不改变分流逻辑。
+
+#### Prompt 要点
+- 角色：沟通意图分类器。
+- 任务：从给定列表中选择最匹配的意图，不创建新类别。
+- 提供边界示例 few-shot。
+
+#### 异常降级
+- 失败 → `intent: "other", confidence: 0.0`。
+
+---
+
+### 前置分流仲裁（纯程序，零 Token）
+
+节点 A 和 B 并行调用，程序收集结果后执行判定函数：
+
+```python
+def pre_filter(surface_risk, intent):
+    if surface_risk == "high":
+        return "LAYER2"
+    if intent in ("harassment", "solicitation"):
+        return "LAYER2"
+    if surface_risk == "low" and intent in ("normal_social", "opinion_expression", "information_seeking"):
+        return "PASS"
+    return "LAYER2"
+```
+
+- `PASS`：直接放行，不调用后续 AI。
+- `LAYER2`：进入深度审查层（节点 C）。
+
+---
+
+### 节点 C – 语境裁决员 `context_judge`
+
+| 项目 | 设置 |
+|------|------|
+| **思考模式** | 开启 (`thinking: true`, 推理内容计入 `completion_tokens` 并受 `max_tokens` 统一限制) |
+| **温度** | `0.3` |
+| **max_tokens** | `400`（推理+回答总和，基于实测正常需求约 350 设定，留 15% 冗余） |
+| **超时** | `2000ms` |
+| **职责** | 综合语境、反讽、黑话，判断真实违规性 |
+
+#### 输入
+```json
+{
+  "text": "原文",
+  "locale": "zh-CN",
+  "surface_flags": ["contact_exposure"],
+  "claimed_intent": "solicitation"
+}
+```
+
+#### 输出
+```json
+{
+  "violation": {
+    "is_violation": true,
+    "type": "insult",
+    "severity": "high",
+    "confidence": 0.92
+  },
+  "reasoning_summary": "用反讽语气使用‘天才’攻击他人智力",
+  "rule_ids": ["R101"]
+}
+```
+- `is_violation` 为 `false` 时，`type`、`severity` 为 `null`。
+- `severity` 枚举：`low`, `medium`, `high`, `extreme`；`extreme` 仅限无争议严重违规（如儿童色情、暴力恐怖），不准滥用。
+
+#### Prompt 要点
+- 角色：资深内容合规审核员，熟悉中文隐性违规。
+- 指令：基于 `surface_flags` 和 `claimed_intent`，但独立判断真伪；考虑文化、讽刺、圈子表达。
+- 思考步骤约束：“请用三步推理：1. 表面语义；2. 语境与反讽；3. 最终定性。”
+- 强制：输出应包含思考过程，但最终必须是合法 JSON 对象（通过 `response_format: { type: "json_object" }` 强制）。
+
+#### 异常降级
+- 输出解析失败（含 JSON 截断）→ 尝试补全括号修复；修复失败 → 视为 `is_violation: false`，记录告警。
+
+---
+
+### 深度仲裁（纯程序）
+
+```python
+def deep_judge(violation):
+    if not violation["is_violation"]:
+        return "PASS"
+    conf = violation["confidence"]
+    sev = violation["severity"]
+    if conf >= 0.9 and sev in ("high", "extreme"):
+        return "AUTO_BLOCK"
+    if conf >= 0.7 or sev in ("high", "extreme"):
+        return "HUMAN_REVIEW"
+    return "PASS"
+```
+
+- 阈值 `0.9` 和 `0.7` 可根据业务调整，按违规类型分策略。
+- `AUTO_BLOCK` 自动拦截；`HUMAN_REVIEW` 进入人工队列；其余放行。
+
+---
+
+### 节点 D – 证据摘要员 `evidence_summarizer`
+
+| 项目 | 设置 |
+|------|------|
+| **思考模式** | 关闭 |
+| **温度** | `0.0` |
+| **max_tokens** | `250` |
+| **超时** | `800ms` |
+| **触发条件** | 仅当最终决定为 `HUMAN_REVIEW` 时调用 |
+
+#### 输入
+```json
+{
+  "text": "原文",
+  "surface_risk": "medium",
+  "intent": "solicitation",
+  "judge_output": { ... }
+}
+```
+
+#### 输出
+```json
+{
+  "one_liner": "用户以评论为掩护，引导添加私人联系方式",
+  "highlight_ranges": [[12, 24], [56, 62]],
+  "similar_cases": [
+    {
+      "case_id": "CASE-2341",
+      "resolution": "BLOCK",
+      "summary": "伪装活动导流"
+    }
+  ],
+  "suggested_action": "BLOCK"
+}
+```
+- `highlight_ranges`：待高亮的字符索引区间。
+- `similar_cases`：由程序通过向量检索获得历史案例，此处 AI 只将其组织进输出，不自主检索。
+- `suggested_action`：基于历史案例的建议。
+
+#### Prompt 要点
+- 角色：人工审核员助理。
+- 指令：整理信息为一句话摘要，划定可疑片段，引用给定相似案例，给出行动建议；不重新判决。
+- 禁止：添加新解释。
+
+---
+
+## 四、全链路时序与并行策略
+
+```
+                      ┌── A (≤500ms) ──┐
+任务到达 → 程序分发 ──┤                  ├→ 裁决 → PASS / LAYER2
+                      └── B (≤500ms) ──┘
+                         LAYER2：
+                            │
+                            └→ C (≤2000ms) → 裁决 → AUTO_BLOCK / HUMAN_REVIEW / PASS
+                                   HUMAN_REVIEW：
+                                      └→ D (≤800ms) + 加载历史案例 → 推送审核台
+```
+
+- A、B 严格并行。
+- C 仅在分流为 LAYER2 时串行调用。
+- D 仅在需人工时调用。
+- 预期：90% 内容 <600ms 放行，可疑内容约 3 秒内到达人工台。
+
+---
+
+## 五、思考模式与 Token 管理
+
+| 节点 | 思考模式 | 为何 |
+|------|----------|------|
+| A | 关闭 | 模式匹配，不需推理 |
+| B | 关闭 | 意图分类，固定选项 |
+| C | 开启 | 需要推理反讽、黑话、语境微妙性 |
+| D | 关闭 | 整理已知信息，填模板 |
+
+**Token 安全机制**：
+- 所有节点设 `max_tokens` 基于正常输出上限加 15-60% 冗余，正常情况不触发。
+- 对 C 节点额外：`response_format: json_object` + 思考步数约束 + 低温度以控制推理长度。
+- 程序端对所有 AI 输出进行 JSON 解析；若截断，尝试补全；完全失败则降级为安全默认值。
+- 上线后监控 `completion_tokens` 分布，动态微调上限。
+
+---
+
+## 六、缓存架构
+
+**缓存层级**：
+1. **请求级去重**：基于 `text+scene+locale+schema_version` 计算哈希，同一请求在缓存有效期内直接返回历史完整决策，零 Token。
+2. **节点级缓存**：每个节点的输入参数单独生成 SHA256 哈希，命中则返回该节点输出。某些节点可能命中而其他节点未命中，最大化复用。
+3. **规则版本变更**：当 `schema_version`（模式库）或 `rule_ids` 版本更新，按前缀批量失效相关节点缓存。
+
+**存储**：本地内存 LRU + Redis 持久化，TTL 根据业务确定（如 24 小时）。
+
+---
+
+## 七、反馈闭环与规则进化
+
+**人工裁决记录**：审核员确认或推翻建议后，完整案例（文本、所有 AI 输出、人工标签）存入案例库。
+
+**离线进化**：
+- 每积累 500 例人工裁决，触发分析：
+  - 识别 A 节点的模式误判（正常内容被错误标记），调整模式库，更新 `schema_version`。
+  - 提取新型黑话变体，新增 `pattern_id` 或合规规则 ID。
+- 更新后旧缓存自然失效，无需重训模型。
+
+**索引重建**：案例库向量索引定期重建，为 D 节点提供最新相似案例。
+
+---
+
+## 八、可配置参数总表
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| 前置层 A 超时 | 500ms | |
+| 前置层 B 超时 | 500ms | |
+| 深度层 C 超时 | 2000ms | |
+| 摘要层 D 超时 | 800ms | |
+| C 节点置信阈值（自动拦截） | 0.9 | 可降至 0.85 以加强审核 |
+| C 节点置信阈值（人工复核） | 0.7 | 可上调以减少人工 |
+| 缓存 TTL | 24h | 按业务需求 |
+
+---
+
+## 九、部署与扩展性
+
+- 每个节点实现为独立微服务或函数，接口标准统一：接收 JSON，返回 JSON。
+- 中央仲裁器无状态，可水平扩展。
+- 人工审核台独立队列，支持按优先级（违规严重度）排序。
+- 全链路异步，适合高并发：A、B 并行，C 异步返回，人工队列可批量拉取。
