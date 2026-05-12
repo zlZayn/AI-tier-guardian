@@ -1,13 +1,8 @@
 """中央编排器 orchestrator
-全链路时序控制与并行策略：
 
-             ┌── A (≤500ms) ──┐
-任务到达 → 程序分发 ──┤                  ├→ 裁决 → PASS / LAYER2
-             └── B (≤500ms) ──┘
-                LAYER2：
-                   └→ C (≤2000ms) → 裁决 → BLOCK / HUMAN_REVIEW / PASS
-                          HUMAN_REVIEW：
-                             └→ D (≤800ms) + 加载历史案例 → 推送审核台
+Layer 1（并行）：A 表层扫描 + B 意图探测 → 前置仲裁 → PASS / LAYER2
+Layer 2（串行）：C 语境裁决 → 深度仲裁 → PASS / BLOCK / HUMAN_REVIEW
+Layer 3（按需）：D 证据摘要，仅 HUMAN_REVIEW 时触发
 """
 
 from __future__ import annotations
@@ -15,11 +10,18 @@ from __future__ import annotations
 import concurrent.futures
 import logging
 from dataclasses import asdict
-from typing import Optional
 
 from tier_guardian.arbitration import deep_judge, pre_filter
 from tier_guardian.cache import CacheManager
-from tier_guardian.config import Config, FinalDecision, Layer1Result, SurfaceRisk, IntentLabel, ViolationSeverity, PatternCategory
+from tier_guardian.config import (
+    Config,
+    FinalDecision,
+    IntentLabel,
+    Layer1Result,
+    PatternCategory,
+    SurfaceRisk,
+    ViolationSeverity,
+)
 from tier_guardian.llm_client import LLMClient
 from tier_guardian.models import (
     ContextJudgeOutput,
@@ -55,7 +57,9 @@ class Orchestrator:
     def close(self) -> None:
         self._llm.close()
 
-    def process(self, text: str, scene: str = "comment", locale: str = "zh-CN") -> TaskContext:
+    def process(
+        self, text: str, scene: str = "comment", locale: str = "zh-CN"
+    ) -> TaskContext:
         ctx = TaskContext(text=text, locale=locale, scene=scene)
 
         cached = self._cache.get_request_cache(text, scene, locale)
@@ -87,7 +91,9 @@ class Orchestrator:
         ctx.final_decision = final
 
         if final == FinalDecision.HUMAN_REVIEW:
-            summary_output = self._run_summary(text, surface_output, intent_output, judge_output)
+            summary_output = self._run_summary(
+                text, surface_output, intent_output, judge_output
+            )
             ctx.nodes.summary = summary_output
 
         self._cache_result(ctx)
@@ -104,18 +110,16 @@ class Orchestrator:
         """并行运行节点 A 和 B"""
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            surface_future = executor.submit(
-                self._run_surface_with_cache, text, locale
-            )
-            intent_future = executor.submit(
-                self._run_intent_with_cache, text, scene
-            )
+            surface_future = executor.submit(self._run_surface_with_cache, text, locale)
+            intent_future = executor.submit(self._run_intent_with_cache, text, scene)
 
             try:
                 surface_output = surface_future.result()
             except Exception:
                 logger.warning("Surface scanner failed, degrading")
-                surface_output = SurfaceScannerOutput(patterns=[], surface_risk=SurfaceRisk.MEDIUM)
+                surface_output = SurfaceScannerOutput(
+                    patterns=[], surface_risk=SurfaceRisk.MEDIUM
+                )
 
             try:
                 intent_output = intent_future.result()
@@ -180,13 +184,22 @@ class Orchestrator:
         )
         return output
 
-    def _load_similar_cases(self, judge_output: ContextJudgeOutput) -> list[SimilarCase]:
+    def _load_similar_cases(
+        self, judge_output: ContextJudgeOutput
+    ) -> list[SimilarCase]:
         # TODO: 集成向量检索，从案例库中加载相似历史案例
         return []
 
     def _cache_result(self, ctx: TaskContext) -> None:
         self._cache.set_request_cache(
-            ctx.text, ctx.scene, ctx.locale, {"final_decision": ctx.final_decision.value if ctx.final_decision else None}
+            ctx.text,
+            ctx.scene,
+            ctx.locale,
+            {
+                "final_decision": ctx.final_decision.value
+                if ctx.final_decision
+                else None
+            },
         )
 
     @property
@@ -201,12 +214,14 @@ def _reconstruct_surface_output(data: dict) -> SurfaceScannerOutput:
             category = PatternCategory(p.get("category", "other"))
         except ValueError:
             category = PatternCategory.OTHER
-        patterns.append(PatternHit(
-            id=p.get("id", "UNKNOWN"),
-            category=category,
-            fragment=p.get("fragment", ""),
-            span=p.get("span", []),
-        ))
+        patterns.append(
+            PatternHit(
+                id=p.get("id", "UNKNOWN"),
+                category=category,
+                fragment=p.get("fragment", ""),
+                span=p.get("span", []),
+            )
+        )
     try:
         risk = SurfaceRisk(data.get("surface_risk", "medium"))
     except ValueError:

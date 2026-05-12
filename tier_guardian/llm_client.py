@@ -39,7 +39,7 @@ class LLMClient:
         system_prompt: str,
         user_message: str,
         node_config: NodeConfig,
-        response_schema: Optional[dict] = None,
+        json_output: bool = False,
     ) -> dict[str, Any]:
         try:
             kwargs: dict[str, Any] = {
@@ -51,11 +51,13 @@ class LLMClient:
                 "temperature": node_config.temperature,
                 "max_tokens": node_config.max_tokens,
             }
-            if response_schema is not None:
+            if node_config.thinking:
+                kwargs["extra_body"] = {"thinking": {"type": "enabled"}}
+            if json_output:
                 kwargs["response_format"] = {"type": "json_object"}
 
             response = self._client.chat.completions.create(**kwargs)
-        except BaseException as e:
+        except Exception as e:
             logger.error("LLM call failed: %s", e)
             raise LLMResponseError(f"LLM call failed: {e}")
 
@@ -86,18 +88,18 @@ def _try_repair_json(raw: str) -> Optional[dict[str, Any]]:
         if ch == '"' and in_string:
             in_string = False
             continue
-        if ch == '\\' and in_string:
+        if ch == "\\" and in_string:
             escape = True
             continue
         if in_string:
             continue
-        if ch in ('{', '['):
+        if ch in ("{", "["):
             stack.append(ch)
-        elif ch == '}':
-            if stack and stack[-1] == '{':
+        elif ch == "}":
+            if stack and stack[-1] == "{":
                 stack.pop()
-        elif ch == ']':
-            if stack and stack[-1] == '[':
+        elif ch == "]":
+            if stack and stack[-1] == "[":
                 stack.pop()
 
     repaired = raw.rstrip()
@@ -105,14 +107,14 @@ def _try_repair_json(raw: str) -> Optional[dict[str, Any]]:
     if in_string:
         repaired += '"'
 
-    if repaired.rstrip().endswith(':'):
+    if repaired.rstrip().endswith(":"):
         repaired += '""'
 
     for opener in reversed(stack):
-        if opener == '{':
-            repaired += '}'
-        elif opener == '[':
-            repaired += ']'
+        if opener == "{":
+            repaired += "}"
+        elif opener == "[":
+            repaired += "]"
 
     try:
         return json.loads(repaired)
@@ -125,14 +127,14 @@ def _try_repair_json(raw: str) -> Optional[dict[str, Any]]:
     repaired2 = raw.rstrip()
     if in_string:
         repaired2 += '"'
-    if repaired2.rstrip().endswith(':'):
-        repaired2 += 'null'
+    if repaired2.rstrip().endswith(":"):
+        repaired2 += "null"
 
     for opener in reversed(stack):
-        if opener == '{':
-            repaired2 += '}'
-        elif opener == '[':
-            repaired2 += ']'
+        if opener == "{":
+            repaired2 += "}"
+        elif opener == "[":
+            repaired2 += "]"
 
     try:
         return json.loads(repaired2)

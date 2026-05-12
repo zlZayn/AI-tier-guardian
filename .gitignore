@@ -43,6 +43,10 @@ htmlcov/
 config.json
 *.log
 
+# Project specific
+.cache/
+test_results.json
+
 # OS
 .DS_Store
 Thumbs.db

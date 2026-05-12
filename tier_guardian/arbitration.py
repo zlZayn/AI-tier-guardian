@@ -53,7 +53,7 @@ def deep_judge(violation: Violation, config: Config) -> FinalDecision:
 
     Returns:
         PASS: 放行
-        AUTO_BLOCK: 自动拦截
+        BLOCK: 自动拦截
         HUMAN_REVIEW: 转入人工审核队列
     """
     if not violation.is_violation:

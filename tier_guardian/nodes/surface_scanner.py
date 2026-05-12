@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 
 from tier_guardian.config import Config, SurfaceRisk, PatternCategory
@@ -11,37 +10,43 @@ from tier_guardian.models import PatternHit, SurfaceScannerOutput
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """仅输出严格JSON，禁止任何其他文本。
+SYSTEM_PROMPT = """仅输出严格json，禁止任何其他文本。
 
-你是字面模式扫描器。忽略语境、讽刺、隐含意义，仅匹配已知高风险字面模式。
+你是字面模式扫描器。忽略语境、讽刺、隐含意义，仅匹配已知高风险字面模式。不推理意图。
 
 检测类别：
-- contact_exposure: 联系方式（电话、邮箱、社交账号）
-- insult_template: 辱骂模板
-- illegal_transaction_keywords: 违法交易词（毒品、枪支等）
-- minor_protection_risk: 未成年人风险
-- spam_template: 垃圾广告/刷屏
-- other: 其他
+- contact_exposure: 明确索要或提供联系方式（电话号、邮箱、社交账号）。注意：仅提及平台名称不构成命中（如"微信支付很方便"不命中，"加我微信"才命中）
+- insult_template: 辱骂模板（脏话、人身攻击词组）
+- illegal_transaction_keywords: 违法交易关键词（毒品、枪支、违禁品买卖）
+- minor_protection_risk: 涉及未成年人的不当内容
+- spam_template: 垃圾广告/刷屏模板
+- other: 其他可疑模式
 
 规则：
-- 最多返回5条命中，超过则仅前5条且surface_risk至少为medium
-- 无命中时patterns为空数组，surface_risk为low
-- span为字符起止索引（含首不含尾）
+- fragment必须是从原文本精确截取的子串，不可改写、不可省略
+- span为字符起止索引（含首不含尾），必须和fragment长度一致
+- 最多返回5条命中。若命中超过5条，仅保留前5条且surface_risk至少为"medium"
+- 无命中时patterns为空数组，surface_risk为"low"
 
-输出格式（仅此JSON，无其他内容）：
-{"patterns":[{"id":"P001","category":"contact_exposure","fragment":"13800138000","span":[0,11]}],"surface_risk":"low"}"""
+无命中时输出（参照此格式）：
+{"patterns":[],"surface_risk":"low"}
+
+有命中时输出（参照此格式）：
+{"patterns":[{"id":"P001","category":"contact_exposure","fragment":"加我微信13800138000","span":[0,12]}],"surface_risk":"high"}"""
 
 
-def run_surface_scanner(client: LLMClient, text: str, locale: str, config: Config) -> SurfaceScannerOutput:
+def run_surface_scanner(
+    client: LLMClient, text: str, locale: str, config: Config
+) -> SurfaceScannerOutput:
     node_config = config.surface_scanner
-    user_message = f'text: """{text}"""\nlocale: {locale}\n\n仅输出JSON对象。'
+    user_message = f'text: """{text}"""\nlocale: {locale}'
 
     try:
         result = client.chat(
             system_prompt=SYSTEM_PROMPT,
             user_message=user_message,
             node_config=node_config,
-            response_schema={"type": "json_object"},
+            json_output=True,
         )
     except LLMClientError:
         logger.warning("Surface scanner failed, degrading to medium risk")
@@ -59,12 +64,14 @@ def _parse_output(raw: dict) -> SurfaceScannerOutput:
                 category = PatternCategory(p.get("category", "other"))
             except ValueError:
                 category = PatternCategory.OTHER
-            patterns.append(PatternHit(
-                id=p.get("id", "UNKNOWN"),
-                category=category,
-                fragment=p.get("fragment", ""),
-                span=p.get("span", []),
-            ))
+            patterns.append(
+                PatternHit(
+                    id=p.get("id", "UNKNOWN"),
+                    category=category,
+                    fragment=p.get("fragment", ""),
+                    span=p.get("span", []),
+                )
+            )
         risk_raw = raw.get("surface_risk", "medium")
         try:
             surface_risk = SurfaceRisk(risk_raw)

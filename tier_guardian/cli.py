@@ -70,7 +70,7 @@ def _load_config(path: str | None) -> Config:
     config_path = Path("config.yaml")
     if config_path.exists():
         return Config.from_file(config_path)
-    return Config()
+    return Config.defaults()
 
 
 def _process_single(orch: Orchestrator, text: str, args) -> None:

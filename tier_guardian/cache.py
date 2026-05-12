@@ -1,10 +1,10 @@
 """缓存架构
-支持三层缓存：
-1. 请求级去重：基于 text+scene+locale+schema_version 计算哈希，同一请求直接返回历史完整决策
-2. 节点级缓存：每个节点的输入参数单独生成 SHA256 哈希，命中则返回该节点输出
-3. 规则版本变更：schema_version 更新时按前缀批量失效相关节点缓存
 
-存储：本地内存 LRU + Redis 持久化（可选）
+diskcache（SQLite）持久化，进程内 + 跨进程共享，自动 TTL 过期。
+
+两层复用：
+1. 请求级：基于 text+scene+locale+schema_version 哈希，同一请求直接返回历史决策
+2. 节点级：每个节点的输入参数独立哈希，命中则跳过 LLM 调用
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Optional
 
-from cachetools import LRUCache
+from diskcache import Cache as DiskCache
 
 from tier_guardian.config import Config
 
@@ -35,24 +35,16 @@ class CacheStats:
 
 
 class CacheManager:
-    """两层缓存管理器：内存 LRU + Redis（可选）"""
+    """diskcache 持久化缓存，进程退出后数据保留在磁盘。"""
 
     def __init__(self, config: Config) -> None:
         self._config = config
         self._stats = CacheStats()
-        self._lru: LRUCache = LRUCache(maxsize=config.cache_max_size)
-        self._redis = None
-        self._init_redis()
-
-    def _init_redis(self) -> None:
-        try:
-            import redis
-            self._redis = redis.from_url(self._config.redis_url, decode_responses=True)
-            self._redis.ping()
-            logger.info("Redis cache connected: %s", self._config.redis_url)
-        except Exception:
-            self._redis = None
-            logger.info("Redis unavailable, using in-memory LRU only")
+        self._cache: DiskCache = DiskCache(
+            directory=config.cache_dir,
+            size_limit=config.cache_max_size,
+        )
+        logger.info("Cache ready: %s (max %d bytes)", config.cache_dir, config.cache_max_size)
 
     def _build_request_hash(self, text: str, scene: str, locale: str) -> str:
         payload = json.dumps({
@@ -73,7 +65,7 @@ class CacheManager:
 
     def get_request_cache(self, text: str, scene: str, locale: str) -> Optional[dict]:
         key = self._build_request_hash(text, scene, locale)
-        result = self._get(key)
+        result = self._cache.get(key)
         if result is not None:
             self._stats.request_hits += 1
             self._stats.hits += 1
@@ -84,11 +76,11 @@ class CacheManager:
 
     def set_request_cache(self, text: str, scene: str, locale: str, decision: dict) -> None:
         key = self._build_request_hash(text, scene, locale)
-        self._set(key, decision)
+        self._cache.set(key, decision, expire=self._config.cache_ttl_seconds)
 
     def get_node_cache(self, node_name: str, input_params: dict) -> Optional[Any]:
         key = self._build_node_hash(node_name, input_params)
-        result = self._get(key)
+        result = self._cache.get(key)
         if result is not None:
             self._stats.node_hits += 1
             self._stats.hits += 1
@@ -99,44 +91,14 @@ class CacheManager:
 
     def set_node_cache(self, node_name: str, input_params: dict, output: Any) -> None:
         key = self._build_node_hash(node_name, input_params)
-        self._set(key, output)
-
-    def _get(self, key: str) -> Optional[Any]:
-        if key in self._lru:
-            return self._lru[key]
-        if self._redis:
-            try:
-                raw = self._redis.get(key)
-                if raw:
-                    value = json.loads(raw)
-                    self._lru[key] = value
-                    return value
-            except Exception:
-                logger.warning("Redis get failed for key %s", key[:16])
-        return None
-
-    def _set(self, key: str, value: Any) -> None:
-        self._lru[key] = value
-        if self._redis:
-            try:
-                raw = json.dumps(value, ensure_ascii=False, default=str)
-                self._redis.setex(key, self._config.cache_ttl_seconds, raw)
-            except Exception:
-                logger.warning("Redis set failed for key %s", key[:16])
+        self._cache.set(key, output, expire=self._config.cache_ttl_seconds)
 
     def invalidate_by_prefix(self, prefix: str) -> int:
-        """按前缀批量失效缓存（用于规则版本变更）"""
         count = 0
-        to_delete = [k for k in self._lru if k.startswith(prefix)]
-        for k in to_delete:
-            del self._lru[k]
-            count += 1
-        if self._redis:
-            try:
-                for k in to_delete:
-                    self._redis.delete(k)
-            except Exception:
-                logger.warning("Redis batch delete failed")
+        for key in list(self._cache.iterkeys()):
+            if key.startswith(prefix):
+                self._cache.delete(key)
+                count += 1
         logger.info("Invalidated %d cache entries with prefix %s", count, prefix)
         return count
 

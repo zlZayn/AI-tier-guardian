@@ -1,7 +1,5 @@
 """数据模型与序列化测试"""
 
-import pytest
-
 from tier_guardian.config import (
     SurfaceRisk,
     IntentLabel,
@@ -17,8 +15,6 @@ from tier_guardian.models import (
     Violation,
     ContextJudgeOutput,
     EvidenceSummarizerOutput,
-    SimilarCase,
-    NodesResult,
 )
 
 

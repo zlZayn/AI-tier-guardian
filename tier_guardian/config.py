@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 
 class SurfaceRisk(str, Enum):
@@ -60,31 +59,23 @@ class NodeConfig:
 
 @dataclass
 class Config:
-    model_name: str = "deepseek-chat"
-    api_base_url: str = "https://api.deepseek.com/v1"
-    api_key: str = field(default_factory=lambda: os.getenv("DEEPSEEK_API_KEY", ""))
+    model_name: str
+    api_base_url: str
+    api_key: str
+    surface_scanner: NodeConfig
+    intent_probe: NodeConfig
+    context_judge: NodeConfig
+    evidence_summarizer: NodeConfig
+    auto_block_confidence: float
+    human_review_confidence: float
+    schema_version: str
+    cache_ttl_seconds: int
+    cache_dir: str
+    cache_max_size: int
 
-    surface_scanner: NodeConfig = field(default_factory=lambda: NodeConfig(
-        thinking=False, temperature=0.0, max_tokens=150,
-    ))
-    intent_probe: NodeConfig = field(default_factory=lambda: NodeConfig(
-        thinking=False, temperature=0.0, max_tokens=120,
-    ))
-    context_judge: NodeConfig = field(default_factory=lambda: NodeConfig(
-        thinking=True, temperature=0.3, max_tokens=400,
-    ))
-    evidence_summarizer: NodeConfig = field(default_factory=lambda: NodeConfig(
-        thinking=False, temperature=0.0, max_tokens=250,
-    ))
-
-    auto_block_confidence: float = 0.9
-    human_review_confidence: float = 0.7
-
-    schema_version: str = "v2.3.1"
-
-    cache_ttl_seconds: int = 86400
-    redis_url: str = field(default_factory=lambda: os.getenv("REDIS_URL", "redis://localhost:6379/0"))
-    cache_max_size: int = 10000
+    @classmethod
+    def defaults(cls) -> "Config":
+        return cls._from_dict({})
 
     @classmethod
     def from_file(cls, path: str | Path) -> "Config":
@@ -100,26 +91,26 @@ class Config:
 
     @classmethod
     def _from_dict(cls, data: dict) -> "Config":
-        cfg = cls()
-        if "model_name" in data:
-            cfg.model_name = data["model_name"]
-        if "api_base_url" in data:
-            cfg.api_base_url = data["api_base_url"]
-        if "api_key" in data:
-            cfg.api_key = data["api_key"]
-        for node_key in ("surface_scanner", "intent_probe", "context_judge", "evidence_summarizer"):
-            if node_key in data:
-                setattr(cfg, node_key, NodeConfig(**data[node_key]))
-        if "auto_block_confidence" in data:
-            cfg.auto_block_confidence = data["auto_block_confidence"]
-        if "human_review_confidence" in data:
-            cfg.human_review_confidence = data["human_review_confidence"]
-        if "schema_version" in data:
-            cfg.schema_version = data["schema_version"]
-        if "cache_ttl_seconds" in data:
-            cfg.cache_ttl_seconds = data["cache_ttl_seconds"]
-        if "redis_url" in data:
-            cfg.redis_url = data["redis_url"]
-        if "cache_max_size" in data:
-            cfg.cache_max_size = data["cache_max_size"]
-        return cfg
+        def _node(key: str, thinking: bool, temperature: float, max_tokens: int) -> NodeConfig:
+            d = data.get(key, {})
+            return NodeConfig(
+                thinking=d.get("thinking", thinking),
+                temperature=d.get("temperature", temperature),
+                max_tokens=d.get("max_tokens", max_tokens),
+            )
+
+        return cls(
+            model_name=data.get("model_name", "deepseek-v4-flash"),
+            api_base_url=data.get("api_base_url", "https://api.deepseek.com/v1"),
+            api_key=data.get("api_key", os.getenv("DEEPSEEK_API_KEY", "")),
+            surface_scanner=_node("surface_scanner", thinking=False, temperature=0.0, max_tokens=250),
+            intent_probe=_node("intent_probe", thinking=False, temperature=0.0, max_tokens=120),
+            context_judge=_node("context_judge", thinking=True, temperature=0.3, max_tokens=600),
+            evidence_summarizer=_node("evidence_summarizer", thinking=False, temperature=0.0, max_tokens=300),
+            auto_block_confidence=data.get("auto_block_confidence", 0.9),
+            human_review_confidence=data.get("human_review_confidence", 0.7),
+            schema_version=data.get("schema_version", "v2.3.1"),
+            cache_ttl_seconds=data.get("cache_ttl_seconds", 86400),
+            cache_dir=data.get("cache_dir", ".cache"),
+            cache_max_size=data.get("cache_max_size", 1073741824),
+        )

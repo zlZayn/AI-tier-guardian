@@ -1,8 +1,5 @@
 """LLM 客户端单元测试（不依赖实际 API）"""
 
-import pytest
-import json
-
 from tier_guardian.llm_client import _try_repair_json
 
 
