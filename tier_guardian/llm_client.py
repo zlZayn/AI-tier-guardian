@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from typing import Any, Optional
 
 from openai import OpenAI
@@ -26,6 +27,7 @@ class LLMClient:
 
     def __init__(self, config: Config) -> None:
         self._config = config
+        self._semaphore = threading.Semaphore(config.max_concurrent_requests)
         self._client = OpenAI(
             api_key=config.api_key,
             base_url=config.api_base_url,
@@ -35,6 +37,16 @@ class LLMClient:
         self._client.close()
 
     def chat(
+        self,
+        system_prompt: str,
+        user_message: str,
+        node_config: NodeConfig,
+        json_output: bool = False,
+    ) -> dict[str, Any]:
+        with self._semaphore:
+            return self._chat(system_prompt, user_message, node_config, json_output)
+
+    def _chat(
         self,
         system_prompt: str,
         user_message: str,

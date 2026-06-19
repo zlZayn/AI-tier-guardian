@@ -58,7 +58,12 @@ class TestSurfaceScannerOutput:
         assert out.surface_risk == SurfaceRisk.LOW
 
     def test_with_patterns(self):
-        hit = PatternHit(id="P001", category=PatternCategory.INSULT_TEMPLATE, fragment="test", span=[0, 4])
+        hit = PatternHit(
+            id="P001",
+            category=PatternCategory.INSULT_TEMPLATE,
+            fragment="test",
+            span=[0, 4],
+        )
         out = SurfaceScannerOutput(patterns=[hit], surface_risk=SurfaceRisk.HIGH)
         assert len(out.patterns) == 1
         assert out.surface_risk == SurfaceRisk.HIGH
@@ -68,7 +73,6 @@ class TestTaskContext:
     def test_create_minimal(self):
         ctx = TaskContext(text="hello")
         assert ctx.text == "hello"
-        assert ctx.locale == "zh-CN"
         assert ctx.scene == "comment"
         assert ctx.nodes.surface is None
         assert ctx.nodes.intent is None
@@ -94,12 +98,26 @@ class TestTaskContext:
     def test_to_dict_full_pipeline(self):
         ctx = TaskContext(text="bad content")
         ctx.nodes.surface = SurfaceScannerOutput(
-            patterns=[PatternHit(id="P001", category=PatternCategory.CONTACT_EXPOSURE, fragment="138xxx", span=[0, 5])],
+            patterns=[
+                PatternHit(
+                    id="P001",
+                    category=PatternCategory.CONTACT_EXPOSURE,
+                    fragment="138xxx",
+                    span=[0, 5],
+                )
+            ],
             surface_risk=SurfaceRisk.HIGH,
         )
-        ctx.nodes.intent = IntentProbeOutput(intent=IntentLabel.SOLICITATION, confidence=0.9)
+        ctx.nodes.intent = IntentProbeOutput(
+            intent=IntentLabel.SOLICITATION, confidence=0.9
+        )
         ctx.nodes.judge = ContextJudgeOutput(
-            violation=Violation(is_violation=True, type="solicitation", severity=ViolationSeverity.HIGH, confidence=0.95),
+            violation=Violation(
+                is_violation=True,
+                type="solicitation",
+                severity=ViolationSeverity.HIGH,
+                confidence=0.95,
+            ),
             reasoning_summary="引导添加联系方式",
             rule_ids=["R101"],
         )

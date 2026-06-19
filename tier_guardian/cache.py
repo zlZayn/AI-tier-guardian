@@ -3,7 +3,7 @@
 diskcache（SQLite）持久化，进程内 + 跨进程共享，自动 TTL 过期。
 
 两层复用：
-1. 请求级：基于 text+scene+locale+schema_version 哈希，同一请求直接返回历史决策
+1. 请求级：基于 text+scene+schema_version 哈希，同一请求直接返回历史决策
 2. 节点级：每个节点的输入参数独立哈希，命中则跳过 LLM 调用
 """
 
@@ -44,27 +44,37 @@ class CacheManager:
             directory=config.cache_dir,
             size_limit=config.cache_max_size,
         )
-        logger.info("Cache ready: %s (max %d bytes)", config.cache_dir, config.cache_max_size)
+        logger.info(
+            "Cache ready: %s (max %d bytes)", config.cache_dir, config.cache_max_size
+        )
 
-    def _build_request_hash(self, text: str, scene: str, locale: str) -> str:
-        payload = json.dumps({
-            "text": text,
-            "scene": scene,
-            "locale": locale,
-            "schema_version": self._config.schema_version,
-        }, sort_keys=True, ensure_ascii=False)
+    def _build_request_hash(self, text: str, scene: str) -> str:
+        payload = json.dumps(
+            {
+                "text": text,
+                "scene": scene,
+                "schema_version": self._config.schema_version,
+            },
+            sort_keys=True,
+            ensure_ascii=False,
+        )
         return _hash_key(payload)
 
     def _build_node_hash(self, node_name: str, input_params: dict) -> str:
-        payload = json.dumps({
-            "node": node_name,
-            "params": input_params,
-            "schema_version": self._config.schema_version,
-        }, sort_keys=True, ensure_ascii=False, default=str)
+        payload = json.dumps(
+            {
+                "node": node_name,
+                "params": input_params,
+                "schema_version": self._config.schema_version,
+            },
+            sort_keys=True,
+            ensure_ascii=False,
+            default=str,
+        )
         return _hash_key(payload)
 
-    def get_request_cache(self, text: str, scene: str, locale: str) -> Optional[dict]:
-        key = self._build_request_hash(text, scene, locale)
+    def get_request_cache(self, text: str, scene: str) -> Optional[dict]:
+        key = self._build_request_hash(text, scene)
         result = self._cache.get(key)
         if result is not None:
             self._stats.request_hits += 1
@@ -74,8 +84,10 @@ class CacheManager:
             self._stats.misses += 1
         return result
 
-    def set_request_cache(self, text: str, scene: str, locale: str, decision: dict) -> None:
-        key = self._build_request_hash(text, scene, locale)
+    def set_request_cache(
+        self, text: str, scene: str, decision: dict
+    ) -> None:
+        key = self._build_request_hash(text, scene)
         self._cache.set(key, decision, expire=self._config.cache_ttl_seconds)
 
     def get_node_cache(self, node_name: str, input_params: dict) -> Optional[Any]:

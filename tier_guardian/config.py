@@ -72,6 +72,7 @@ class Config:
     cache_ttl_seconds: int
     cache_dir: str
     cache_max_size: int
+    max_concurrent_requests: int
 
     @classmethod
     def defaults(cls) -> "Config":
@@ -84,6 +85,7 @@ class Config:
             raw = json.loads(path.read_text(encoding="utf-8"))
         elif path.suffix in (".yaml", ".yml"):
             import yaml  # type: ignore
+
             raw = yaml.safe_load(path.read_text(encoding="utf-8"))
         else:
             raise ValueError(f"Unsupported config format: {path.suffix}")
@@ -91,7 +93,9 @@ class Config:
 
     @classmethod
     def _from_dict(cls, data: dict) -> "Config":
-        def _node(key: str, thinking: bool, temperature: float, max_tokens: int) -> NodeConfig:
+        def _node(
+            key: str, thinking: bool, temperature: float, max_tokens: int
+        ) -> NodeConfig:
             d = data.get(key, {})
             return NodeConfig(
                 thinking=d.get("thinking", thinking),
@@ -103,14 +107,23 @@ class Config:
             model_name=data.get("model_name", "deepseek-v4-flash"),
             api_base_url=data.get("api_base_url", "https://api.deepseek.com/v1"),
             api_key=data.get("api_key", os.getenv("DEEPSEEK_API_KEY", "")),
-            surface_scanner=_node("surface_scanner", thinking=False, temperature=0.0, max_tokens=250),
-            intent_probe=_node("intent_probe", thinking=False, temperature=0.0, max_tokens=120),
-            context_judge=_node("context_judge", thinking=True, temperature=0.3, max_tokens=600),
-            evidence_summarizer=_node("evidence_summarizer", thinking=False, temperature=0.0, max_tokens=300),
+            surface_scanner=_node(
+                "surface_scanner", thinking=False, temperature=0.0, max_tokens=250
+            ),
+            intent_probe=_node(
+                "intent_probe", thinking=False, temperature=0.0, max_tokens=120
+            ),
+            context_judge=_node(
+                "context_judge", thinking=True, temperature=0.3, max_tokens=600
+            ),
+            evidence_summarizer=_node(
+                "evidence_summarizer", thinking=False, temperature=0.0, max_tokens=300
+            ),
             auto_block_confidence=data.get("auto_block_confidence", 0.9),
             human_review_confidence=data.get("human_review_confidence", 0.7),
             schema_version=data.get("schema_version", "v2.3.1"),
             cache_ttl_seconds=data.get("cache_ttl_seconds", 86400),
             cache_dir=data.get("cache_dir", ".cache"),
             cache_max_size=data.get("cache_max_size", 1073741824),
+            max_concurrent_requests=data.get("max_concurrent_requests", 4),
         )

@@ -27,5 +27,6 @@
     "schema_version": "v2.3.1",
     "cache_ttl_seconds": 86400,
     "cache_dir": ".cache",
-    "cache_max_size": 1073741824
+    "cache_max_size": 1073741824,
+    "max_concurrent_requests": 4
 }

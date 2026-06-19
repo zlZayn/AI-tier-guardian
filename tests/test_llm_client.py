@@ -15,7 +15,7 @@ class TestJsonRepair:
         assert result["key"] == "value"
 
     def test_truncated_array(self):
-        raw = '[1, 2, 3'
+        raw = "[1, 2, 3"
         result = _try_repair_json(raw)
         assert result is not None
         assert result == [1, 2, 3]

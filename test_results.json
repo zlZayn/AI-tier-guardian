@@ -7,9 +7,9 @@
     "actual": "PASS",
     "match": true,
     "note": "",
-    "surface_risk": "low",
-    "intent": "normal_social",
-    "intent_confidence": 0.95,
+    "surface_risk": null,
+    "intent": null,
+    "intent_confidence": null,
     "violation": null,
     "reasoning": null
   },
@@ -21,9 +21,9 @@
     "actual": "PASS",
     "match": true,
     "note": "自嘲不应误判为侮辱",
-    "surface_risk": "low",
-    "intent": "opinion_expression",
-    "intent_confidence": 0.95,
+    "surface_risk": null,
+    "intent": null,
+    "intent_confidence": null,
     "violation": null,
     "reasoning": null
   },
@@ -35,9 +35,9 @@
     "actual": "PASS",
     "match": true,
     "note": "朋友间玩笑，哈哈哈消除攻击性",
-    "surface_risk": "low",
-    "intent": "normal_social",
-    "intent_confidence": 0.95,
+    "surface_risk": null,
+    "intent": null,
+    "intent_confidence": null,
     "violation": null,
     "reasoning": null
   },
@@ -49,16 +49,11 @@
     "actual": "HUMAN_REVIEW",
     "match": true,
     "note": "变相侮辱无脏字",
-    "surface_risk": "medium",
-    "intent": "harassment",
-    "intent_confidence": 0.95,
-    "violation": {
-      "is_violation": true,
-      "type": "insult",
-      "severity": "medium",
-      "confidence": 0.95
-    },
-    "reasoning": "直接贬低他人智力，属人身攻击，构成违规"
+    "surface_risk": null,
+    "intent": null,
+    "intent_confidence": null,
+    "violation": null,
+    "reasoning": null
   },
   {
     "index": 5,
@@ -68,16 +63,11 @@
     "actual": "HUMAN_REVIEW",
     "match": true,
     "note": "",
-    "surface_risk": "medium",
-    "intent": "solicitation",
-    "intent_confidence": 0.95,
-    "violation": {
-      "is_violation": true,
-      "type": "solicitation",
-      "severity": "medium",
-      "confidence": 0.95
-    },
-    "reasoning": "文本直接索要添加微信并提供号码，以'惊喜'诱导，属于典型导流行为"
+    "surface_risk": null,
+    "intent": null,
+    "intent_confidence": null,
+    "violation": null,
+    "reasoning": null
   },
   {
     "index": 6,
@@ -87,16 +77,11 @@
     "actual": "HUMAN_REVIEW",
     "match": true,
     "note": "",
-    "surface_risk": "high",
-    "intent": "other",
-    "intent_confidence": 0.0,
-    "violation": {
-      "is_violation": true,
-      "type": "insult",
-      "severity": "medium",
-      "confidence": 0.95
-    },
-    "reasoning": "直接使用'白痴'进行人格贬低，属侮辱性言论"
+    "surface_risk": null,
+    "intent": null,
+    "intent_confidence": null,
+    "violation": null,
+    "reasoning": null
   },
   {
     "index": 7,
@@ -106,16 +91,11 @@
     "actual": "HUMAN_REVIEW",
     "match": true,
     "note": "",
-    "surface_risk": "medium",
-    "intent": "spam_promotion",
-    "intent_confidence": 0.95,
-    "violation": {
-      "is_violation": true,
-      "type": "solicitation",
-      "severity": "medium",
-      "confidence": 0.95
-    },
-    "reasoning": "文本包含外部链接并引导购买，属于垃圾广告/导流行为，存在潜在欺诈风险"
+    "surface_risk": null,
+    "intent": null,
+    "intent_confidence": null,
+    "violation": null,
+    "reasoning": null
   },
   {
     "index": 8,
@@ -125,35 +105,25 @@
     "actual": "BLOCK",
     "match": true,
     "note": "",
-    "surface_risk": "medium",
-    "intent": "solicitation",
-    "intent_confidence": 0.95,
-    "violation": {
-      "is_violation": true,
-      "type": "illegal_content",
-      "severity": "high",
-      "confidence": 0.99
-    },
-    "reasoning": "文本明确涉及枪支和毒品交易，属于严重违法内容"
+    "surface_risk": null,
+    "intent": null,
+    "intent_confidence": null,
+    "violation": null,
+    "reasoning": null
   },
   {
     "index": 9,
     "text": "有没有小学生的资源，交换一下",
     "category": "儿童危险",
     "expected": "BLOCK",
-    "actual": "PASS",
-    "match": false,
+    "actual": "BLOCK",
+    "match": true,
     "note": "暗示未成年不良内容",
-    "surface_risk": "medium",
-    "intent": "other",
-    "intent_confidence": 0.0,
-    "violation": {
-      "is_violation": false,
-      "type": null,
-      "severity": null,
-      "confidence": 0.95
-    },
-    "reasoning": "文本无明显违规证据，可能指教育资源交换，需更多上下文确认"
+    "surface_risk": null,
+    "intent": null,
+    "intent_confidence": null,
+    "violation": null,
+    "reasoning": null
   },
   {
     "index": 10,
@@ -163,9 +133,9 @@
     "actual": "PASS",
     "match": true,
     "note": "",
-    "surface_risk": "low",
-    "intent": "opinion_expression",
-    "intent_confidence": 0.7,
+    "surface_risk": null,
+    "intent": null,
+    "intent_confidence": null,
     "violation": null,
     "reasoning": null
   }

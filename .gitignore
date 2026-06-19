@@ -50,3 +50,5 @@ test_results.json
 # OS
 .DS_Store
 Thumbs.db
+
+plan/

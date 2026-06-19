@@ -12,25 +12,9 @@ from tier_guardian.models import (
     EvidenceSummarizerOutput,
     SimilarCase,
 )
+from tier_guardian.prompts import EVIDENCE_SUMMARIZER
 
 logger = logging.getLogger(__name__)
-
-SYSTEM_PROMPT = """仅输出严格json，禁止任何其他文本。
-
-你是人工审核员助理。基于上游已完成的违规判定，整理简洁摘要供人工复核。
-不得重新判断违规。不得添加原文中没有的信息或推断。不得反驳上游判定。
-
-任务：
-1. one_liner: 一句话概括可疑行为（面向人工审核员，清晰具体）
-2. highlight_ranges: 原文中最可疑片段的字符起止索引（含首不含尾），用于高亮辅助定位。若无明确可疑片段则传空数组
-3. similar_cases: 直接引用输入中提供的相似案例。若无案例则传空数组
-4. suggested_action: 基于已有判定建议的处理动作（BLOCK / PASS / HUMAN_REVIEW）
-
-输出示例 — 有案例：
-{"one_liner":"用户以活动推荐为掩护，引导添加私人微信","highlight_ranges":[[12,24]],"similar_cases":[{"case_id":"CASE-2341","resolution":"BLOCK","summary":"伪装活动导流至微信"}],"suggested_action":"HUMAN_REVIEW"}
-
-输出示例 — 无案例、无明确可疑片段：
-{"one_liner":"文本含有轻度辱骂但语境模糊，建议人工判断","highlight_ranges":[],"similar_cases":[],"suggested_action":"HUMAN_REVIEW"}"""
 
 
 def run_evidence_summarizer(
@@ -47,7 +31,7 @@ def run_evidence_summarizer(
 
     try:
         result = client.chat(
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=EVIDENCE_SUMMARIZER.system_prompt,
             user_message=user_message,
             node_config=node_config,
             json_output=True,

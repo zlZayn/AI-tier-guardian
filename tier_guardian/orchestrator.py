@@ -13,6 +13,7 @@ from dataclasses import asdict
 
 from tier_guardian.arbitration import deep_judge, pre_filter
 from tier_guardian.cache import CacheManager
+from tier_guardian.case_store import CaseStore
 from tier_guardian.config import (
     Config,
     FinalDecision,
@@ -53,22 +54,24 @@ class Orchestrator:
         self._config = config
         self._llm = LLMClient(config)
         self._cache = CacheManager(config)
+        self._case_store = CaseStore()
 
     def close(self) -> None:
+        self._case_store.close()
         self._llm.close()
 
     def process(
-        self, text: str, scene: str = "comment", locale: str = "zh-CN"
+        self, text: str, scene: str = "comment"
     ) -> TaskContext:
-        ctx = TaskContext(text=text, locale=locale, scene=scene)
+        ctx = TaskContext(text=text, scene=scene)
 
-        cached = self._cache.get_request_cache(text, scene, locale)
+        cached = self._cache.get_request_cache(text, scene)
         if cached is not None:
             logger.info("Request cache hit, returning cached decision")
             ctx.final_decision = FinalDecision(cached["final_decision"])
             return ctx
 
-        surface_output, intent_output = self._run_layer1(text, locale, scene)
+        surface_output, intent_output = self._run_layer1(text, scene)
 
         ctx.nodes.surface = surface_output
         ctx.nodes.intent = intent_output
@@ -84,7 +87,7 @@ class Orchestrator:
         surface_flags = [p.category.value for p in surface_output.patterns]
         claimed_intent = intent_output.intent.value
 
-        judge_output = self._run_layer2(text, locale, surface_flags, claimed_intent)
+        judge_output = self._run_layer2(text, surface_flags, claimed_intent)
         ctx.nodes.judge = judge_output
 
         final = deep_judge(judge_output.violation, self._config)
@@ -97,6 +100,8 @@ class Orchestrator:
             ctx.nodes.summary = summary_output
 
         self._cache_result(ctx)
+        if ctx.final_decision in (FinalDecision.BLOCK, FinalDecision.HUMAN_REVIEW):
+            self._case_store.save(ctx)
         logger.info(
             "Pipeline complete: task_id=%s final=%s",
             ctx.task_id,
@@ -105,12 +110,12 @@ class Orchestrator:
         return ctx
 
     def _run_layer1(
-        self, text: str, locale: str, scene: str
+        self, text: str, scene: str
     ) -> tuple[SurfaceScannerOutput, IntentProbeOutput]:
         """并行运行节点 A 和 B"""
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            surface_future = executor.submit(self._run_surface_with_cache, text, locale)
+            surface_future = executor.submit(self._run_surface_with_cache, text)
             intent_future = executor.submit(self._run_intent_with_cache, text, scene)
 
             try:
@@ -129,12 +134,12 @@ class Orchestrator:
 
         return surface_output, intent_output
 
-    def _run_surface_with_cache(self, text: str, locale: str) -> SurfaceScannerOutput:
-        input_params = {"text": text, "locale": locale}
+    def _run_surface_with_cache(self, text: str) -> SurfaceScannerOutput:
+        input_params = {"text": text}
         cached = self._cache.get_node_cache("surface_scanner", input_params)
         if cached is not None:
             return _reconstruct_surface_output(cached)
-        output = run_surface_scanner(self._llm, text, locale, self._config)
+        output = run_surface_scanner(self._llm, text, self._config)
         self._cache.set_node_cache("surface_scanner", input_params, asdict(output))
         return output
 
@@ -148,11 +153,10 @@ class Orchestrator:
         return output
 
     def _run_layer2(
-        self, text: str, locale: str, surface_flags: list[str], claimed_intent: str
+        self, text: str, surface_flags: list[str], claimed_intent: str
     ) -> ContextJudgeOutput:
         input_params = {
             "text": text,
-            "locale": locale,
             "surface_flags": surface_flags,
             "claimed_intent": claimed_intent,
         }
@@ -160,7 +164,7 @@ class Orchestrator:
         if cached is not None:
             return _reconstruct_judge_output(cached)
         output = run_context_judge(
-            self._llm, text, locale, surface_flags, claimed_intent, self._config
+            self._llm, text, surface_flags, claimed_intent, self._config
         )
         self._cache.set_node_cache("context_judge", input_params, asdict(output))
         return output
@@ -187,14 +191,12 @@ class Orchestrator:
     def _load_similar_cases(
         self, judge_output: ContextJudgeOutput
     ) -> list[SimilarCase]:
-        # TODO: 集成向量检索，从案例库中加载相似历史案例
-        return []
+        return self._case_store.find_similar(judge_output.violation.type)
 
     def _cache_result(self, ctx: TaskContext) -> None:
         self._cache.set_request_cache(
             ctx.text,
             ctx.scene,
-            ctx.locale,
             {
                 "final_decision": ctx.final_decision.value
                 if ctx.final_decision

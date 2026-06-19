@@ -7,43 +7,20 @@ import logging
 from tier_guardian.config import Config, SurfaceRisk, PatternCategory
 from tier_guardian.llm_client import LLMClient, LLMClientError
 from tier_guardian.models import PatternHit, SurfaceScannerOutput
+from tier_guardian.prompts import SURFACE_SCANNER
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """仅输出严格json，禁止任何其他文本。
-
-你是字面模式扫描器。忽略语境、讽刺、隐含意义，仅匹配已知高风险字面模式。不推理意图。
-
-检测类别：
-- contact_exposure: 明确索要或提供联系方式（电话号、邮箱、社交账号）。注意：仅提及平台名称不构成命中（如"微信支付很方便"不命中，"加我微信"才命中）
-- insult_template: 辱骂模板（脏话、人身攻击词组）
-- illegal_transaction_keywords: 违法交易关键词（毒品、枪支、违禁品买卖）
-- minor_protection_risk: 涉及未成年人的不当内容
-- spam_template: 垃圾广告/刷屏模板
-- other: 其他可疑模式
-
-规则：
-- fragment必须是从原文本精确截取的子串，不可改写、不可省略
-- span为字符起止索引（含首不含尾），必须和fragment长度一致
-- 最多返回5条命中。若命中超过5条，仅保留前5条且surface_risk至少为"medium"
-- 无命中时patterns为空数组，surface_risk为"low"
-
-无命中时输出（参照此格式）：
-{"patterns":[],"surface_risk":"low"}
-
-有命中时输出（参照此格式）：
-{"patterns":[{"id":"P001","category":"contact_exposure","fragment":"加我微信13800138000","span":[0,12]}],"surface_risk":"high"}"""
-
 
 def run_surface_scanner(
-    client: LLMClient, text: str, locale: str, config: Config
+    client: LLMClient, text: str, config: Config
 ) -> SurfaceScannerOutput:
     node_config = config.surface_scanner
-    user_message = f'text: """{text}"""\nlocale: {locale}'
+    user_message = f'text: """{text}"""'
 
     try:
         result = client.chat(
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=SURFACE_SCANNER.system_prompt,
             user_message=user_message,
             node_config=node_config,
             json_output=True,

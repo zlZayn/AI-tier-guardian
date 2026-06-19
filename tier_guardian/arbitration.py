@@ -62,10 +62,16 @@ def deep_judge(violation: Violation, config: Config) -> FinalDecision:
     conf = violation.confidence
     sev = violation.severity
 
-    if conf >= config.auto_block_confidence and sev in (ViolationSeverity.HIGH, ViolationSeverity.EXTREME):
+    if conf >= config.auto_block_confidence and sev in (
+        ViolationSeverity.HIGH,
+        ViolationSeverity.EXTREME,
+    ):
         return FinalDecision.BLOCK
 
-    if conf >= config.human_review_confidence or sev in (ViolationSeverity.HIGH, ViolationSeverity.EXTREME):
+    if conf >= config.human_review_confidence or sev in (
+        ViolationSeverity.HIGH,
+        ViolationSeverity.EXTREME,
+    ):
         return FinalDecision.HUMAN_REVIEW
 
     return FinalDecision.PASS
