@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tier Guardian — 三庭二审演示</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f5f7;
+    --card: #fff;
+    --text: #1d1d1f;
+    --muted: #6e6e73;
+    --border: #d2d2d7;
+    --green: #30d158;
+    --red: #ff453a;
+    --orange: #ff9f0a;
+    --blue: #007aff;
+    --teal: #5ac8fa;
+    --amber: #ff9f0a;
+    --purple: #bf5af2;
+    --gray: #8e8e93;
+    --shadow: 0 2px 12px rgba(0,0,0,.08);
+    --radius: 14px;
+    --font: "SF Pro Display", "PingFang SC", -apple-system, BlinkMacSystemFont, "Noto Sans SC", system-ui, sans-serif;
+  }
+  html { font-size: 15px; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 1.5rem 1rem;
+  }
+  .app { max-width: 780px; width: 100%; }
+
+  /* Header */
+  .hdr { text-align: center; margin-bottom: 1.25rem; }
+  .hdr h1 { font-size: 1.3rem; font-weight: 700; }
+  .hdr p { font-size: .85rem; color: var(--muted); margin-top: .2rem; }
+
+  /* Controls */
+  .ctl {
+    display: flex; gap: .5rem; align-items: center;
+    background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: .75rem 1rem; margin-bottom: 1rem;
+  }
+  .ctl select {
+    flex: 1; min-width: 0;
+    padding: .5rem .6rem; border: 1px solid var(--border); border-radius: 8px;
+    font-size: .85rem; font-family: inherit; background: #fff; color: var(--text);
+  }
+  .ctl select:focus { border-color: var(--blue); outline: none; }
+  .btn {
+    padding: .5rem 1.2rem; border: none; border-radius: 8px;
+    font-size: .85rem; font-weight: 600; font-family: inherit;
+    cursor: pointer; white-space: nowrap;
+  }
+  .btn:disabled { opacity: .3; cursor: default; }
+  .btn-play { background: var(--blue); color: #fff; }
+  .btn-reset { background: var(--border); color: var(--text); }
+
+  /* Input display */
+  .input {
+    background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: .9rem 1.2rem; margin-bottom: 1rem;
+    border-left: 3px solid var(--blue);
+    display: none;
+  }
+  .input.show { display: block; }
+  .input .t { font-size: 1rem; font-weight: 500; }
+  .input .m { font-size: .8rem; color: var(--muted); margin-top: .25rem; }
+
+  /* Pipeline */
+  .pipeline { margin-bottom: 1rem; }
+
+  /* Layer box */
+  .layer {
+    background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+    margin-bottom: .75rem; overflow: hidden;
+    opacity: 0; transform: translateY(8px);
+    transition: opacity .5s, transform .5s;
+  }
+  .layer.show { opacity: 1; transform: translateY(0); }
+  .layer-hdr {
+    padding: .6rem 1.2rem; font-size: .75rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .05em; color: #fff; display: flex; align-items: center; gap: .5rem;
+  }
+  .layer-hdr .badge { font-size: .65rem; opacity: .8; }
+  .l1 .layer-hdr { background: linear-gradient(135deg, #007aff, #5ac8fa); }
+  .l2 .layer-hdr { background: linear-gradient(135deg, #ff9f0a, #ffcc00); }
+  .l3 .layer-hdr { background: linear-gradient(135deg, #bf5af2, #5ac8fa); }
+  .layer-body { padding: .75rem 1.2rem; }
+
+  /* Node card inside layer */
+  .node {
+    background: var(--bg); border-radius: 10px; padding: .75rem 1rem;
+    margin-bottom: .6rem;
+    opacity: 0; transform: translateY(6px);
+    transition: opacity .5s, transform .5s;
+  }
+  .node:last-child { margin-bottom: 0; }
+  .node.show { opacity: 1; transform: translateY(0); }
+  .node.active { box-shadow: 0 0 0 2px var(--blue), 0 4px 16px rgba(0,122,255,.2); }
+
+  .node-hdr {
+    display: flex; align-items: center; gap: .5rem; margin-bottom: .3rem;
+  }
+  .node-name { font-weight: 600; font-size: .9rem; }
+  .node-tag {
+    font-size: .65rem; font-weight: 600; padding: .1rem .5rem;
+    border-radius: 12px; text-transform: uppercase;
+  }
+
+  .node-body {
+    font-size: .82rem; line-height: 1.5;
+    max-height: 0; overflow: hidden;
+    transition: max-height .5s;
+  }
+  .node.show .node-body { max-height: 300px; }
+
+  .pill { display: inline-block; padding: .15rem .6rem; border-radius: 12px; font-size: .78rem; font-weight: 600; margin-right: .3rem; }
+
+  /* Connector arrow */
+  .connector {
+    text-align: center; padding: .35rem 0;
+    opacity: 0; transition: opacity .4s;
+  }
+  .connector.show { opacity: 1; }
+  .connector svg { display: block; margin: 0 auto; }
+
+  /* Decision box (between layers) */
+  .decision {
+    text-align: center; padding: .5rem 0;
+    opacity: 0; transition: opacity .4s;
+  }
+  .decision.show { opacity: 1; }
+  .decision .box {
+    display: inline-block;
+    padding: .55rem 1.8rem; border-radius: 10px;
+    font-weight: 700; font-size: .85rem;
+    border: 2px solid var(--border); background: var(--card);
+  }
+  .decision .box.pass { border-color: var(--green); color: var(--green); background: #e8f8ee; }
+  .decision .box.layer2 { border-color: var(--orange); color: var(--orange); background: #fff4e5; }
+  .decision .box.block { border-color: var(--red); color: var(--red); background: #ffe8e7; }
+  .decision .box.review { border-color: var(--orange); color: var(--orange); background: #fff4e5; }
+  .decision .sub {
+    font-size: .78rem; color: var(--muted); margin-top: .2rem; line-height: 1.4;
+  }
+
+  /* Path indicator */
+  .path-hint {
+    display: none;
+    text-align: center; font-size: .8rem; font-weight: 600;
+    padding: .3rem 1rem; border-radius: 8px; margin: .3rem 0;
+  }
+  .path-hint.show { display: block; }
+  .path-hint.pass { background: #e8f8ee; color: #00663a; }
+  .path-hint.block { background: #ffe8e7; color: #990000; }
+  .path-hint.review { background: #fff4e5; color: #995500; }
+
+  /* Result */
+  .result-box {
+    background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 1.25rem; text-align: center; margin-top: .5rem;
+    border-top: 3px solid var(--border);
+    display: none;
+  }
+  .result-box.show { display: block; }
+  .result-box .big { font-size: 1.8rem; font-weight: 800; }
+  .result-box .sub { font-size: .85rem; color: var(--muted); margin-top: .25rem; }
+  .result-box.r-pass { border-top-color: var(--green); }
+  .result-box.r-pass .big { color: var(--green); }
+  .result-box.r-block { border-top-color: var(--red); }
+  .result-box.r-block .big { color: var(--red); }
+  .result-box.r-review { border-top-color: var(--orange); }
+  .result-box.r-review .big { color: var(--orange); }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="hdr">
+    <h1>三庭二审 · Tier Guardian</h1>
+    <p>选择一句文本，观察四个审查员如何协作判定</p>
+  </div>
+
+  <div class="ctl">
+    <select id="sel"></select>
+    <button class="btn btn-play" id="playBtn">▶ 演示</button>
+    <button class="btn btn-reset" id="resetBtn">重置</button>
+  </div>
+
+  <div class="input" id="inputBox">
+    <div class="t" id="inputText"></div>
+    <div class="m" id="inputMeta"></div>
+  </div>
+
+  <div class="pipeline" id="pipeline"></div>
+
+  <div class="result-box" id="resultBox">
+    <div class="big" id="resultBig"></div>
+    <div class="sub" id="resultSub"></div>
+  </div>
+</div>
+
+<script>
+// ========== DATA ==========
+const CASES = [
+  { text: "你好，今天天气不错",          cat: "正常社交",   expect: "PASS" },
+  { text: "好",                          cat: "极短文本",   expect: "PASS" },
+  { text: "我真是个天才，把代码全删了",  cat: "自嘲反讽",   expect: "PASS" },
+  { text: "你个憨憨，这都忘了哈哈哈",    cat: "朋友互损",   expect: "PASS" },
+  { text: "脑子是个好东西，可惜你没有",  cat: "隐性侮辱",   expect: "HUMAN_REVIEW" },
+  { text: "加我微信13800138000，有惊喜", cat: "明显导流",   expect: "HUMAN_REVIEW" },
+  { text: "你这个白痴，连这都不懂",      cat: "直接辱骂",   expect: "HUMAN_REVIEW" },
+  { text: "全网最低价，点击链接购买 http://fake-shop.com", cat: "垃圾广告", expect: "HUMAN_REVIEW" },
+  { text: "卖枪卖毒，需要的私聊",        cat: "违法交易",   expect: "BLOCK" },
+  { text: "有没有小学生的资源，交换一下",cat: "儿童危险",   expect: "BLOCK" },
+];
+
+// Simulated node outputs per case index
+function genMock(c, idx) {
+  const m = {};
+  // A - surface
+  const t = c.text;
+  if (t.includes("微信")||t.includes("138"))      m.surface={patterns:[{cat:"contact_exposure",frag:"加我微信13800138000"}],risk:"high"};
+  else if (t.includes("白痴"))                     m.surface={patterns:[{cat:"insult_template",frag:"白痴"}],risk:"medium"};
+  else if (t.includes("憨憨"))                      m.surface={patterns:[{cat:"insult_template",frag:"憨憨"}],risk:c.expect==="PASS"?"low":"medium"};
+  else if (t.includes("卖枪")||t.includes("卖毒"))  m.surface={patterns:[{cat:"illegal_transaction_keywords",frag:"卖枪卖毒"}],risk:"high"};
+  else if (t.includes("小学生"))                    m.surface={patterns:[{cat:"minor_protection_risk",frag:"小学生"}],risk:"high"};
+  else if (t.includes("最低价")||t.includes("购买")) m.surface={patterns:[{cat:"spam_template",frag:"全网最低价"}],risk:"medium"};
+  else                                              m.surface={patterns:[],risk:"low"};
+
+  // B - intent
+  if (t==="好")                                     m.intent={intent:"normal_social",conf:.55};
+  else if (c.cat==="正常社交"||c.cat==="极短文本")    m.intent={intent:"normal_social",conf:.95};
+  else if (c.cat==="自嘲反讽"||c.cat==="朋友互损")    m.intent={intent:"opinion_expression",conf:.85};
+  else if (c.cat==="隐性侮辱")                       m.intent={intent:"harassment",conf:.70};
+  else if (c.cat==="明显导流")                       m.intent={intent:"solicitation",conf:.90};
+  else if (c.cat==="直接辱骂")                       m.intent={intent:"harassment",conf:.95};
+  else if (c.cat==="垃圾广告")                       m.intent={intent:"spam_promotion",conf:.95};
+  else if (c.cat==="违法交易")                       m.intent={intent:"solicitation",conf:.85};
+  else if (c.cat==="儿童危险")                       m.intent={intent:"solicitation",conf:.80};
+
+  // pre_filter
+  const rHi=m.surface.risk==="high", rLo=m.surface.risk==="low", int=m.intent.intent;
+  const safe=["normal_social","opinion_expression","information_seeking"];
+  if (rHi) m.pre_filter="LAYER2";
+  else if (int==="harassment"||int==="solicitation") m.pre_filter="LAYER2";
+  else if (rLo&&safe.includes(int)) m.pre_filter="PASS";
+  else m.pre_filter="LAYER2";
+
+  // C - judge
+  if (m.pre_filter==="LAYER2") {
+    if (c.expect==="BLOCK")            m.judge={vio:true, type:t.includes("小学生")?"minor_risk":"illegal_content", sev:"extreme", conf:.95, reason:"明确涉及违禁品/未成年人保护"};
+    else if (c.expect==="HUMAN_REVIEW"){
+      if (c.cat==="隐性侮辱")          m.judge={vio:true, type:"insult", sev:"medium", conf:.78, reason:"变相贬损但不含脏字，存在争议空间"};
+      else if (c.cat==="明显导流")     m.judge={vio:true, type:"solicitation", sev:"medium", conf:.85, reason:"以搭讪方式索要微信号，属导流行为"};
+      else if (c.cat==="直接辱骂")     m.judge={vio:true, type:"insult", sev:"high", conf:.88, reason:"直接人身攻击，但缺少极端威胁"};
+      else if (c.cat==="垃圾广告")     m.judge={vio:true, type:"spam", sev:"medium", conf:.80, reason:"营销推广链接，存在欺诈风险"};
+      else                             m.judge={vio:true, type:"other", sev:"low", conf:.70, reason:"需要人工进一步判断"};
+    } else                             m.judge={vio:false, type:null, sev:null, conf:.95, reason:"自嘲/玩笑语境，不构成违规"};
+  }
+  m.deep_judge = m.pre_filter==="PASS" ? "PASS" : c.expect;
+
+  // D - summary
+  if (m.deep_judge==="HUMAN_REVIEW") {
+    if (c.cat==="隐性侮辱")        m.summary={one:"用户以隐性贬损方式攻击他人", suggest:"HUMAN_REVIEW"};
+    else if (c.cat==="明显导流")   m.summary={one:"以搭讪为引导向添加私人微信", suggest:"HUMAN_REVIEW"};
+    else if (c.cat==="直接辱骂")   m.summary={one:"用户直接使用侮辱性词汇攻击他人", suggest:"HUMAN_REVIEW"};
+    else if (c.cat==="垃圾广告")   m.summary={one:"发布营销链接疑似钓鱼/欺诈网站", suggest:"HUMAN_REVIEW"};
+    else                           m.summary={one:"文本存在可疑内容", suggest:"HUMAN_REVIEW"};
+  }
+  return m;
+}
+const MOCK = CASES.map((c,i)=>genMock(c,i));
+
+// ========== RUNTIME ==========
+const $ = id=>document.getElementById(id);
+const sel=$("sel"), pipe=$("pipeline"), playBtn=$("playBtn"), resetBtn=$("resetBtn");
+const inputBox=$("inputBox"), inputText=$("inputText"), inputMeta=$("inputMeta");
+const resultBox=$("resultBox"), resultBig=$("resultBig"), resultSub=$("resultSub");
+
+let timer=null, running=false;
+
+function populate() {
+  sel.innerHTML = CASES.map((c,i)=>`<option value="${i}">${c.text.slice(0,38)} — ${c.cat}</option>`).join("");
+  sel.value="0";
+}
+
+function resetAll() {
+  if(timer){clearTimeout(timer);timer=null}
+  running=false; playBtn.disabled=false; playBtn.textContent="▶ 演示";
+  inputBox.classList.remove("show"); pipe.innerHTML="";
+  resultBox.classList.remove("show");
+}
+
+const L = t=>new Promise(r=>{timer=setTimeout(r,t)});
+
+async function demo(idx) {
+  if(running) return;
+  running=true; playBtn.disabled=true; playBtn.textContent="● 进行中";
+  const c=CASES[idx], m=MOCK[idx];
+  resultBox.classList.remove("show");
+  pipe.innerHTML="";
+
+  // Show input
+  inputText.textContent=c.text;
+  inputMeta.innerHTML=`<span>${c.cat}</span>`;
+  inputBox.classList.add("show");
+  await L(500);
+
+  // ===== Layer 1 =====
+  const con0 = buildConnector(); pipe.appendChild(con0);
+  await L(50); con0.classList.add("show");
+  await L(400);
+
+  const layer1 = buildLayer("Layer 1 — 并行", "A (surface_scanner) + B (intent_probe) 同时执行", "l1");
+  pipe.appendChild(layer1);
+  await L(50); layer1.classList.add("show");
+  await L(400);
+
+  // Node A
+  const aNode = addNode(layer1, "A — 表层扫描员", "字面扫描", "关");
+  aNode.innerHTML += `<div class="node-body-content" style="display:none">
+    <span class="pill" style="background:#dbeafe;color:#0040aa">命中 ${m.surface.patterns.length} 条</span>
+    <span class="pill" style="background:${m.surface.risk==='high'?'#fee2e2':'#f3f4f6'};color:${m.surface.risk==='high'?'#991b1b':'#374151'}">风险: ${m.surface.risk}</span>
+    ${m.surface.patterns.length?`<div style="margin-top:.3rem;font-family:monospace;font-size:.78rem;background:#f5f5f7;padding:.4rem;border-radius:6px">${JSON.stringify(m.surface.patterns)}</div>`:'<div style="color:var(--muted);margin-top:.2rem">无匹配模式</div>'}
+  </div>`;
+  aNode.show();
+  await L(300);
+  aNode.querySelector(".node-body-content").style.display="block";
+  aNode.classList.add("active");
+  await L(800);
+  aNode.classList.remove("active");
+
+  // Node B
+  const bNode = addNode(layer1, "B — 意图探测员", "意图探测", "关");
+  bNode.innerHTML += `<div class="node-body-content" style="display:none">
+    <span class="pill" style="background:#ccfbf1;color:#0f5e4a">${m.intent.intent}</span>
+    <span class="pill" style="background:#f3f4f6;color:#374151">置信度 ${m.intent.conf.toFixed(2)}</span>
+  </div>`;
+  bNode.show();
+  await L(300);
+  bNode.querySelector(".node-body-content").style.display="block";
+  bNode.classList.add("active");
+  await L(800);
+  bNode.classList.remove("active");
+  await L(200);
+
+  // ===== pre_filter =====
+  const con1 = buildConnector(); pipe.appendChild(con1);
+  await L(50); con1.classList.add("show");
+  await L(400);
+
+  const pfPass = m.pre_filter === "PASS";
+  const dec1 = buildDecision(
+    pfPass ? "PASS：放行" : "LAYER2：继续深入",
+    pfPass ? "A/B 均判定安全，直接返回，零消耗" : "A 或 B 发现可疑，进入 Layer 2 (C 节点)",
+    pfPass ? "dec-pass" : "dec-layer2"
+  );
+  pipe.appendChild(dec1);
+  await L(50); dec1.classList.add("show");
+  await L(1200);
+
+  if (pfPass) {
+    await showResult(c.expect, "A/B 均判定安全，pre_filter 直接放行");
+    running=false; playBtn.disabled=false; playBtn.textContent="▶ 演示";
+    return;
+  }
+
+  // ===== Layer 2 =====
+  const con2 = buildConnector(); pipe.appendChild(con2);
+  await L(50); con2.classList.add("show");
+  await L(400);
+
+  const layer2 = buildLayer("Layer 2 — 串行", "C (context_judge) 单独执行，thinking 开启", "l2");
+  pipe.appendChild(layer2);
+  await L(50); layer2.classList.add("show");
+  await L(400);
+
+  // Node C
+  const jd = m.judge;
+  const cNode = addNode(layer2, "C — 语境裁决员", "语境裁决", "开");
+  cNode.innerHTML += `<div class="node-body-content" style="display:none">
+    <span class="pill" style="background:${jd.vio?'#fee2e2':'#d1fae5'};color:${jd.vio?'#991b1b':'#065f46'}">${jd.vio?'违规':'未违规'}</span>
+    ${jd.type?`<span class="pill" style="background:#f3f4f6;color:#374151">${jd.type}</span>`:''}
+    ${jd.sev?`<span class="pill" style="background:#fef3c7;color:#92400e">${jd.sev}</span>`:''}
+    <span class="pill" style="background:#f3f4f6;color:#374151">置信度 ${jd.conf.toFixed(2)}</span>
+    <div style="margin-top:.3rem;color:var(--muted);font-size:.8rem">${jd.reason}</div>
+  </div>`;
+  cNode.show();
+  await L(300);
+  cNode.querySelector(".node-body-content").style.display="block";
+  cNode.classList.add("active");
+  await L(1200);
+  cNode.classList.remove("active");
+  await L(200);
+
+  // ===== deep_judge =====
+  const con3 = buildConnector(); pipe.appendChild(con3);
+  await L(50); con3.classList.add("show");
+  await L(400);
+  const dj = m.deep_judge;
+  const djLabel = dj==="PASS" ? "PASS：放行" : dj==="BLOCK" ? "BLOCK：拦截" : "HUMAN_REVIEW：待人工";
+  const djCls = dj==="PASS" ? "dec-pass" : dj==="BLOCK" ? "dec-block" : "dec-review";
+  const djDesc = dj==="PASS" ? "C 判定未违规，放行" : dj==="BLOCK" ? "C 判定违规且置信度 ≥ auto_block，自动拦截" : "C 判定违规但置信度不足 auto_block，需人工复审";
+  const dec2 = buildDecision(djLabel, djDesc, djCls);
+  pipe.appendChild(dec2);
+  await L(50); dec2.classList.add("show");
+  await L(1200);
+
+  if (dj !== "HUMAN_REVIEW") {
+    await showResult(dj, djDesc);
+    running=false; playBtn.disabled=false; playBtn.textContent="▶ 演示";
+    return;
+  }
+
+  // ===== Layer 3 =====
+  const con4 = buildConnector(); pipe.appendChild(con4);
+  await L(50); con4.classList.add("show");
+  await L(400);
+  const layer3 = buildLayer("Layer 3 — 按需", "D (evidence_summarizer) 仅 HUMAN_REVIEW 时执行，不重新判断", "l3");
+  pipe.appendChild(layer3);
+  await L(50); layer3.classList.add("show");
+  await L(400);
+
+  const dNode = addNode(layer3, "D — 证据摘要员", "证据摘要", "关");
+  dNode.innerHTML += `<div class="node-body-content" style="display:none">
+    <div style="font-size:.82rem">${m.summary.one}</div>
+    <span class="pill" style="background:#f3f4f6;color:#374151;margin-top:.3rem;display:inline-block">建议: ${m.summary.suggest}</span>
+  </div>`;
+  dNode.show();
+  await L(300);
+  dNode.querySelector(".node-body-content").style.display="block";
+  dNode.classList.add("active");
+  await L(1000);
+  dNode.classList.remove("active");
+  await L(300);
+
+  await showResult("HUMAN_REVIEW", "D 已整理摘要，等待人工审核员裁决");
+  running=false; playBtn.disabled=false; playBtn.textContent="▶ 演示";
+}
+
+// ========== HELPERS ==========
+function buildLayer(title, sub, cls) {
+  const d=document.createElement("div");
+  d.className=`layer ${cls}`;
+  d.innerHTML=`<div class="layer-hdr">${title}<span class="badge">${sub}</span></div><div class="layer-body"></div>`;
+  return d;
+}
+function addNode(layer, name, tag, think) {
+  const body=layer.querySelector(".layer-body");
+  const d=document.createElement("div");
+  d.className="node";
+  d.innerHTML=`<div class="node-hdr"><span class="node-name">${name}</span><span class="node-tag" style="background:#f3f4f6;color:#374151">${tag}</span><span class="node-tag" style="background:${think==='开'?'#fef3c7':'#f3f4f6'};color:${think==='开'?'#92400e':'#6b7280'}">thinking ${think}</span></div>`;
+  body.appendChild(d);
+  return {
+    el: d,
+    show(){setTimeout(()=>d.classList.add("show"),50)},
+    innerHTML:(h)=>d.innerHTML+=h
+  };
+}
+function buildConnector() {
+  const d=document.createElement("div"); d.className="connector";
+  d.innerHTML=`<svg width="20" height="20" viewBox="0 0 20 20"><path d="M10 2v14M4 10l6 6 6-6" stroke="#c7c7cc" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  return d;
+}
+function buildDecision(label, sub, cls) {
+  const d=document.createElement("div"); d.className="decision";
+  d.innerHTML=`<div class="box ${cls}">${label}</div><div class="sub">${sub}</div>`;
+  return d;
+}
+async function showResult(label, sub) {
+  resultBox.className="result-box";
+  const cls=label==="PASS"?"r-pass":label==="BLOCK"?"r-block":"r-review";
+  resultBox.classList.add(cls,"show");
+  resultBig.textContent=label;
+  resultSub.textContent=sub;
+}
+
+// Override addNode to return the actual element
+function addNode(layer, name, tag, think) {
+  const body=layer.querySelector(".layer-body");
+  const d=document.createElement("div");
+  d.className="node";
+  d.innerHTML=`<div class="node-hdr"><span class="node-name">${name}</span><span class="node-tag" style="background:#e5e5ea;color:#374151">${tag}</span><span class="node-tag" style="background:${think==='开'?'#fef3c7':'#e5e5ea'};color:${think==='开'?'#92400e':'#6b7280'}">thinking ${think}</span></div>`;
+  body.appendChild(d);
+  d.show=()=>setTimeout(()=>d.classList.add("show"),50);
+  return d;
+}
+
+// Init
+populate();
+playBtn.addEventListener("click",()=>{if(!running){let idx=parseInt(sel.value);resetAll();setTimeout(()=>demo(idx),100)}});
+resetBtn.addEventListener("click",resetAll);
+sel.addEventListener("change",()=>{if(!running)resetAll()});
+</script>
+</body>
+</html>
