@@ -14,6 +14,10 @@
 
 ## 快速开始
 
+### 环境要求
+
+- Python >= 3.11
+
 ```bash
 pip install -e .
 cp config.example.json config.json
