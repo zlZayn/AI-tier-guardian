@@ -10,7 +10,7 @@
 - **Layer 2** — C 语境裁决**串行**执行，结合中文网络文化（反讽、黑话、玩笑语气）深度判定
 - **Layer 3** — D 证据摘要**按需**执行，仅在需人工复审时整理材料
 
-各节点细节（thinking 开关、触发条件、输入输出契约）见 [ARCHITECTURE.md](ARCHITECTURE.md)。
+各节点细节（thinking 开关、触发条件、输入输出契约）见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
 ## 快速开始
 
@@ -35,7 +35,7 @@ from tier_guardian.config import Config
 from tier_guardian.orchestrator import Orchestrator
 
 orch = Orchestrator(Config.from_file("config.json"))
-ctx = orch.process("用户评论内容", scene="comment", locale="zh-CN")
+ctx = orch.process("用户评论内容", scene="comment")
 print(ctx.final_decision.value)  # PASS / BLOCK / HUMAN_REVIEW
 orch.close()
 ```
@@ -61,6 +61,7 @@ tier_guardian/
 ├── llm_client.py            # LLM 调用封装（OpenAI SDK）
 ├── arbitration.py           # 程序仲裁（零 Token）
 ├── cache.py                 # diskcache（SQLite）跨进程缓存
+├── case_store.py            # 相似案例存储（SQLite，供人工复审参考）
 ├── orchestrator.py          # 中央编排（并行调度 + 流程控制）
 ├── cli.py                   # 命令行入口
 └── nodes/

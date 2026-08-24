@@ -1,4 +1,4 @@
-# Architecture
+# Tier Guardian 架构说明
 
 本文档记录 tier-guardian 的文件依赖关系、组件间数据流、仲裁决策矩阵和关键技术选型。与 README 的分工：**README 回答"这是什么、怎么用"；本文档回答"里面怎么串通的、改了哪里会影响到什么"。**
 
@@ -54,7 +54,7 @@ TaskContext
 #### A — surface_scanner
 
 ```text
-输入: LLMClient, text, locale, Config
+输入: LLMClient, text, Config
 输出: SurfaceScannerOutput
         ├─ patterns: list[PatternHit]  最多 5 条
         │     每条约束: fragment 是原文精确子串，span 与之长度一致
@@ -75,7 +75,7 @@ TaskContext
 #### C — context_judge
 
 ```text
-输入: LLMClient, text, locale, surface_flags, claimed_intent, Config
+输入: LLMClient, text, surface_flags, claimed_intent, Config
 输出: ContextJudgeOutput
         ├─ violation: Violation
         │      ├─ is_violation: bool
@@ -114,6 +114,7 @@ tier_guardian/
 ├── prompts.py               # 四个 Prompt 对象的唯一定义处
 ├── llm_client.py            # OpenAI SDK 包装 + JSON 修复器
 ├── cache.py                 # diskcache 包装，两层缓存
+├── case_store.py            # 相似案例 SQLite 存储，供 D 节点召回
 ├── arbitration.py           # pre_filter + deep_judge 纯程序仲裁
 ├── orchestrator.py          # process() 定义全链路序列
 ├── cli.py                   # 命令行：单条 / 文件 / REPL
@@ -151,9 +152,12 @@ tests/
                   → models.py
                   → cache.py
                   → llm_client.py
+                  → case_store.py
                   → arbitration.py
                   → nodes/*.py         (四个节点函数)
                   → prompts.py         (提示词注册)
+
+  case_store.py  → models.py          (引用 SimilarCase / TaskContext)
 
   nodes/*.py     → prompts.py          (取对应 Prompt)
                  → config.py           (取 NodeConfig)
@@ -188,9 +192,9 @@ LLM 封装
 
 ```text
 orchestrator.py process() [L56-69]
-  └─ CacheManager.get_request_cache(text, scene, locale)
+  └─ CacheManager.get_request_cache(text, scene)
      └─ cache.py [L49-79]
-        构建 key = SHA256(json({text, scene, locale, schema_version}))
+        构建 key = SHA256(json({text, scene, schema_version}))
         → diskcache.get(key)
         → 命中则跳过全流程
 ```
@@ -200,10 +204,10 @@ orchestrator.py process() [L56-69]
 ```text
 orchestrator.py _run_layer1() [L107-130]
   └─ ThreadPoolExecutor(2).submit:
-       ├─ _run_surface_with_cache(text, locale)
+       ├─ _run_surface_with_cache(text)
        │    ├─ CacheManager.get_node_cache("surface_scanner", ...)
        │    │  └─ cache.py [L81-94]
-       │    └─ run_surface_scanner(llm, text, locale, config)
+       │    └─ run_surface_scanner(llm, text, config)
        │       └─ nodes/surface_scanner.py
        │          ├─ SURFACE_SCANNER.system_prompt   ← prompts.py
        │          ├─ config.surface_scanner           ← 取 NodeConfig
@@ -234,7 +238,7 @@ orchestrator.py process() [L76-82]
 ```text
 orchestrator.py _run_layer2() [L150-166]
   ├─ CacheManager.get_node_cache("context_judge", ...)
-  └─ run_context_judge(llm, text, locale, surface_flags, claimed_intent, config)
+  └─ run_context_judge(llm, text, surface_flags, claimed_intent, config)
      └─ nodes/context_judge.py
         ├─ CONTEXT_JUDGE.system_prompt   ← prompts.py
         ├─ config.context_judge          ← 取 NodeConfig
@@ -256,7 +260,9 @@ orchestrator.py process() [L90-91]
 
 ```text
 orchestrator.py _run_summary() [L168-185]
-  └─ run_evidence_summarizer(llm, text, surface_risk, intent, judge_output, [], config)
+  ├─ _load_similar_cases(judge_output)
+  │    └─ CaseStore.find_similar(violation.type)   ← case_store.py
+  └─ run_evidence_summarizer(llm, text, surface_risk, intent, judge_output, similar_cases, config)
      └─ nodes/evidence_summarizer.py
         ├─ EVIDENCE_SUMMARIZER.system_prompt   ← prompts.py
         ├─ config.evidence_summarizer           ← 取 NodeConfig
@@ -267,7 +273,7 @@ orchestrator.py _run_summary() [L168-185]
 
 ```text
 orchestrator.py _cache_result() [L193-203]
-  └─ CacheManager.set_request_cache(text, scene, locale, {final_decision})
+  └─ CacheManager.set_request_cache(text, scene, {final_decision})
      └─ cache.py [L77-79]
 ```
 
@@ -319,7 +325,7 @@ LAYER2 走 C 节点，PASS 直接返回。定义在 `arbitration.py:18-42`。
 
 | 层级 | 缓存 key 构造 | 命中效果 | 代码位置 |
 | :--- | :--- | :--- | :--- |
-| 请求级 | SHA256(json({text, scene, locale, schema_version})) | 跳过全流程 | cache.py L49-79 |
+| 请求级 | SHA256(json({text, scene, schema_version})) | 跳过全流程 | cache.py L49-79 |
 | 节点级 | SHA256(json({node_name, params, schema_version})) | 跳过该节点 LLM | cache.py L58-94 |
 
 - **写回策略**：请求级在 process() 结束前统一写回，节点级在每个节点执行完后立即写回
