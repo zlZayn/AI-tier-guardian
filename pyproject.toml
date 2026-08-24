@@ -11,11 +11,10 @@ license = {text = "MIT"}
 dependencies = [
     "pydantic>=2.0",
     "openai>=1.0",
-    "redis>=5.0",
-    "cachetools>=5.3",
+    "diskcache>=5.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
