@@ -8,11 +8,11 @@
 
 ## 常用命令
 - uv run pytest tests/ -q
-- python run_batch.py
-- python run_batch.py "文本"
+- uv run python run_batch.py
+- uv run python run_batch.py "文本"
 
 ## 验证快照（2026-08-24）
-- pytest: 41 passed / 0 failed
+- pytest: 41 passed / 0 failed（项目 venv 内）
 
 ## 待办
 - [ ] 用真实 API key 跑一次 run_batch.py 全量比对
@@ -20,7 +20,6 @@
 ## 活跃坑
 - config.json 含密钥已被 gitignore，别提交
 - process() 签名无 locale 参数，场景走 scene（见 README）
-- pyproject 未声明 diskcache（cache.py 依赖它），uv 环境缺包，`uv run pytest` 实际回落系统 Python 才通过（见 [.agents/notes/2026-08-24-architecture-to-docs.md](.agents/notes/2026-08-24-architecture-to-docs.md)）
 
 ## 文档地图
 - 用户入门 → [README.md](README.md)
