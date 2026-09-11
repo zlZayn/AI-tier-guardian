@@ -19,7 +19,7 @@
 - Python >= 3.11
 
 ```bash
-pip install -e .
+uv sync
 cp config.example.json config.json
 # 编辑 config.json，填入 API key
 ```
