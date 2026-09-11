@@ -78,12 +78,9 @@ tier_guardian/
 - **降级安全** -- 任何节点失败降级为安全默认值，不阻断流程
 - **渐进深入** -- 大部分正常内容在 Layer1 即放行，仅可疑内容消耗 C 节点
 
-## 测试
+## 维护
 
-```bash
-python -m pytest tests/ -q
-python -m pytest tests/ --cov=tier_guardian --cov-report=term
-```
+命令、验证快照、待办与活跃坑 → [AGENTS.md](AGENTS.md)
 
 ## License
 
