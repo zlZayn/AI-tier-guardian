@@ -75,11 +75,11 @@ class Config:
     max_concurrent_requests: int
 
     @classmethod
-    def defaults(cls) -> "Config":
+    def defaults(cls) -> Config:
         return cls._from_dict({})
 
     @classmethod
-    def from_file(cls, path: str | Path) -> "Config":
+    def from_file(cls, path: str | Path) -> Config:
         path = Path(path)
         if path.suffix == ".json":
             raw = json.loads(path.read_text(encoding="utf-8"))
@@ -92,7 +92,7 @@ class Config:
         return cls._from_dict(raw)
 
     @classmethod
-    def _from_dict(cls, data: dict) -> "Config":
+    def _from_dict(cls, data: dict) -> Config:
         def _node(
             key: str, thinking: bool, temperature: float, max_tokens: int
         ) -> NodeConfig:

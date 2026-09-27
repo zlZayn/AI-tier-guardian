@@ -1,7 +1,7 @@
 """缓存系统测试"""
 
-from tier_guardian.config import Config
 from tier_guardian.cache import CacheManager
+from tier_guardian.config import Config
 
 
 class TestCacheManager:

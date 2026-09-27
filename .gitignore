@@ -52,3 +52,6 @@ test_results.json
 Thumbs.db
 
 plan/
+
+# Lint / 格式化缓存
+.ruff_cache/

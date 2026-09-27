@@ -10,9 +10,12 @@
 - uv run pytest tests/ -q
 - uv run python run_batch.py
 - uv run python run_batch.py "文本"
+- uv run ruff check . — Lint（ruff 默认规则集，列宽默认 88）
+- uv run ruff format . — 格式化（`--check` 只看不改）
 
-## 验证快照（2026-08-24）
-- pytest: 41 passed / 0 failed（项目 venv 内）
+## 验证快照（2026-09-27）
+- pytest: 41 passed / 0 failed（uv 环境，pytest 9.1.1）
+- Ruff: `check` 0 发现；`format --check` 全绿（全量格式化已落地）
 
 ## 待办
 - [ ] 用真实 API key 跑一次 run_batch.py 全量比对

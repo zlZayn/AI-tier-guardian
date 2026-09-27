@@ -1,20 +1,20 @@
 """数据模型与序列化测试"""
 
 from tier_guardian.config import (
-    SurfaceRisk,
-    IntentLabel,
-    ViolationSeverity,
     FinalDecision,
+    IntentLabel,
     PatternCategory,
+    SurfaceRisk,
+    ViolationSeverity,
 )
 from tier_guardian.models import (
-    TaskContext,
-    PatternHit,
-    SurfaceScannerOutput,
-    IntentProbeOutput,
-    Violation,
     ContextJudgeOutput,
     EvidenceSummarizerOutput,
+    IntentProbeOutput,
+    PatternHit,
+    SurfaceScannerOutput,
+    TaskContext,
+    Violation,
 )
 
 

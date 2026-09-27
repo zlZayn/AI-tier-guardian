@@ -13,7 +13,7 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from diskcache import Cache as DiskCache
 
@@ -73,7 +73,7 @@ class CacheManager:
         )
         return _hash_key(payload)
 
-    def get_request_cache(self, text: str, scene: str) -> Optional[dict]:
+    def get_request_cache(self, text: str, scene: str) -> dict | None:
         key = self._build_request_hash(text, scene)
         result = self._cache.get(key)
         if result is not None:
@@ -90,7 +90,7 @@ class CacheManager:
         key = self._build_request_hash(text, scene)
         self._cache.set(key, decision, expire=self._config.cache_ttl_seconds)
 
-    def get_node_cache(self, node_name: str, input_params: dict) -> Optional[Any]:
+    def get_node_cache(self, node_name: str, input_params: dict) -> Any | None:
         key = self._build_node_hash(node_name, input_params)
         result = self._cache.get(key)
         if result is not None:

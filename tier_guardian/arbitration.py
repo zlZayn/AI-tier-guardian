@@ -7,10 +7,10 @@ from __future__ import annotations
 from tier_guardian.config import (
     Config,
     FinalDecision,
+    IntentLabel,
     Layer1Result,
     SurfaceRisk,
     ViolationSeverity,
-    IntentLabel,
 )
 from tier_guardian.models import Violation
 

@@ -120,7 +120,7 @@ class Orchestrator:
 
             try:
                 surface_output = surface_future.result()
-            except Exception:
+            except Exception:  # noqa: BLE001 — A 节点失败面跨 LLM/缓存/解析，任何失败都要降级为 MEDIUM 而不是中断整条链路
                 logger.warning("Surface scanner failed, degrading")
                 surface_output = SurfaceScannerOutput(
                     patterns=[], surface_risk=SurfaceRisk.MEDIUM
@@ -128,7 +128,7 @@ class Orchestrator:
 
             try:
                 intent_output = intent_future.result()
-            except Exception:
+            except Exception:  # noqa: BLE001 — B 节点失败面跨 LLM/缓存/解析，任何失败都要降级为空意图而不是中断整条链路
                 logger.warning("Intent probe failed, degrading")
                 intent_output = IntentProbeOutput()
 

@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Optional
 
 from tier_guardian.config import (
-    SurfaceRisk,
-    IntentLabel,
-    ViolationSeverity,
     FinalDecision,
+    IntentLabel,
     PatternCategory,
+    SurfaceRisk,
+    ViolationSeverity,
 )
 
 
@@ -44,8 +43,8 @@ class Violation:
     """节点 C 违规判定"""
 
     is_violation: bool = False
-    type: Optional[str] = None
-    severity: Optional[ViolationSeverity] = None
+    type: str | None = None
+    severity: ViolationSeverity | None = None
     confidence: float = 0.0
 
 
@@ -77,10 +76,10 @@ class EvidenceSummarizerOutput:
 
 @dataclass
 class NodesResult:
-    surface: Optional[SurfaceScannerOutput] = None
-    intent: Optional[IntentProbeOutput] = None
-    judge: Optional[ContextJudgeOutput] = None
-    summary: Optional[EvidenceSummarizerOutput] = None
+    surface: SurfaceScannerOutput | None = None
+    intent: IntentProbeOutput | None = None
+    judge: ContextJudgeOutput | None = None
+    summary: EvidenceSummarizerOutput | None = None
 
 
 @dataclass
@@ -90,10 +89,10 @@ class TaskContext:
     text: str
     scene: str = "comment"
     nodes: NodesResult = field(default_factory=NodesResult)
-    final_decision: Optional[FinalDecision] = None
+    final_decision: FinalDecision | None = None
     task_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     created_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
 
     def to_dict(self) -> dict:
@@ -116,7 +115,7 @@ class TaskContext:
         }
 
 
-def _maybe_dataclass_to_dict(obj) -> Optional[dict]:
+def _maybe_dataclass_to_dict(obj) -> dict | None:
     if obj is None:
         return None
     result = {}

@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, ".")
 
 logging.basicConfig(
-    level=logging.DEBUG, stream=open("batch.log", "w", encoding="utf-8")
+    level=logging.DEBUG, filename="batch.log", filemode="w", encoding="utf-8"
 )
 
 from tier_guardian.config import Config

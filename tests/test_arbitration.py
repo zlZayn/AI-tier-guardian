@@ -1,5 +1,6 @@
 """仲裁逻辑单元测试"""
 
+from tier_guardian.arbitration import deep_judge, pre_filter
 from tier_guardian.config import (
     Config,
     FinalDecision,
@@ -8,7 +9,6 @@ from tier_guardian.config import (
     SurfaceRisk,
     ViolationSeverity,
 )
-from tier_guardian.arbitration import pre_filter, deep_judge
 from tier_guardian.models import Violation
 
 

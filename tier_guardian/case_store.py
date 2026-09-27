@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import sqlite3
-from typing import Optional
 
 from tier_guardian.models import SimilarCase, TaskContext
 
@@ -50,7 +49,7 @@ class CaseStore:
         self._conn.commit()
 
     def find_similar(
-        self, violation_type: Optional[str], limit: int = 5
+        self, violation_type: str | None, limit: int = 5
     ) -> list[SimilarCase]:
         if not violation_type:
             return []

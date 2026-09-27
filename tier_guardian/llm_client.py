@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
-from typing import Any, Optional
+from typing import Any
 
 from openai import OpenAI
 
@@ -69,7 +69,7 @@ class LLMClient:
                 kwargs["response_format"] = {"type": "json_object"}
 
             response = self._client.chat.completions.create(**kwargs)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 — SDK 失败面不可枚举：任何调用失败都必须落成本项目的 LLMResponseError
             logger.error("LLM call failed: %s", e)
             raise LLMResponseError(f"LLM call failed: {e}")
 
@@ -86,7 +86,7 @@ class LLMClient:
             raise LLMResponseError("Failed to parse AI output as JSON")
 
 
-def _try_repair_json(raw: str) -> Optional[dict[str, Any]]:
+def _try_repair_json(raw: str) -> dict[str, Any] | None:
     stack: list[str] = []
     in_string = False
     escape = False
@@ -110,9 +110,8 @@ def _try_repair_json(raw: str) -> Optional[dict[str, Any]]:
         elif ch == "}":
             if stack and stack[-1] == "{":
                 stack.pop()
-        elif ch == "]":
-            if stack and stack[-1] == "[":
-                stack.pop()
+        elif ch == "]" and stack and stack[-1] == "[":
+            stack.pop()
 
     repaired = raw.rstrip()
 

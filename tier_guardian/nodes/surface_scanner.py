@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from tier_guardian.config import Config, SurfaceRisk, PatternCategory
+from tier_guardian.config import Config, PatternCategory, SurfaceRisk
 from tier_guardian.llm_client import LLMClient, LLMClientError
 from tier_guardian.models import PatternHit, SurfaceScannerOutput
 from tier_guardian.prompts import SURFACE_SCANNER

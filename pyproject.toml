@@ -19,6 +19,7 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "pytest-cov>=4.0",
+    "ruff>=0.16.9",
 ]
 
 [tool.setuptools.packages.find]
@@ -28,3 +29,6 @@ include = ["tier_guardian*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+[tool.ruff]
+# 不碰 Markdown 里嵌的 Python 片段：文档与笔记正文不属格式化范围
+extend-exclude = ["*.md"]
