@@ -84,9 +84,7 @@ class CacheManager:
             self._stats.misses += 1
         return result
 
-    def set_request_cache(
-        self, text: str, scene: str, decision: dict
-    ) -> None:
+    def set_request_cache(self, text: str, scene: str, decision: dict) -> None:
         key = self._build_request_hash(text, scene)
         self._cache.set(key, decision, expire=self._config.cache_ttl_seconds)
 

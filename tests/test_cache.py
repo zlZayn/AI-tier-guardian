@@ -35,16 +35,12 @@ class TestCacheManager:
             {"text": "hello"},
             {"patterns": [], "surface_risk": "low"},
         )
-        result = cm.get_node_cache(
-            "surface_scanner", {"text": "hello"}
-        )
+        result = cm.get_node_cache("surface_scanner", {"text": "hello"})
         assert result == {"patterns": [], "surface_risk": "low"}
 
     def test_node_cache_miss(self):
         cm = CacheManager(Config.defaults())
-        result = cm.get_node_cache(
-            "surface_scanner", {"text": "nonexistent"}
-        )
+        result = cm.get_node_cache("surface_scanner", {"text": "nonexistent"})
         assert result is None
 
     def test_node_cache_different_input_no_hit(self):

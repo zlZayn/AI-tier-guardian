@@ -60,9 +60,7 @@ class Orchestrator:
         self._case_store.close()
         self._llm.close()
 
-    def process(
-        self, text: str, scene: str = "comment"
-    ) -> TaskContext:
+    def process(self, text: str, scene: str = "comment") -> TaskContext:
         ctx = TaskContext(text=text, scene=scene)
 
         cached = self._cache.get_request_cache(text, scene)

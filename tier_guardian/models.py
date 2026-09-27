@@ -91,9 +91,7 @@ class TaskContext:
     nodes: NodesResult = field(default_factory=NodesResult)
     final_decision: FinalDecision | None = None
     task_id: str = field(default_factory=lambda: uuid.uuid4().hex)
-    created_at: str = field(
-        default_factory=lambda: datetime.now(UTC).isoformat()
-    )
+    created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     def to_dict(self) -> dict:
         return {
