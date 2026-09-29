@@ -1,5 +1,7 @@
 # Tier Guardian
 
+[![CI](https://github.com/zlZayn/AI-tier-guardian/actions/workflows/ci.yml/badge.svg)](https://github.com/zlZayn/AI-tier-guardian/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 三庭二审 AI 内容审核引擎。正常内容在浅层快速放行，可疑内容逐层深入，最模糊的边界交给人工。
 
 ## 架构
@@ -85,3 +87,15 @@ tier_guardian/
 ## License
 
 MIT
+
+---
+
+## 许可
+
+- 本仓基于 [MIT 许可](LICENSE) 发布。
+
+## 贡献
+
+- 本仓为个人项目；问题与建议请走 [Issues](https://github.com/zlZayn/AI-tier-guardian/issues)。
+
+维护者文档地图 → 见 [AGENTS.md](AGENTS.md)。
